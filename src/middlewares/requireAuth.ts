@@ -1,26 +1,19 @@
-import { getAuth } from '@clerk/express';
-import { UserModel } from '@/models/user.model';
-import { asyncHandler } from '@/utils/asyncHandler';
-import HttpStatus from 'http-status';
-import { ApiError } from '@/utils/ApiError';
+import { requireAuth as clerkRequireAuth } from '@clerk/express';
+import { Request, Response, NextFunction } from 'express';
 
-export const requireAuth = asyncHandler(async (req, res, next) => {
-  const { userId } = getAuth(req);
-  if (!userId) {
-    throw new ApiError(HttpStatus.UNAUTHORIZED, 'Unauthorized');
-  }
+export const requireAuth = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    clerkRequireAuth()(req, res, (err) => {
+      if (err) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized access',
+          errors: [err.message],
+        });
+      }
+      next();
+    });
+  };
+};
 
-  // Attach userId for audit plugin
-  (req as any).userId = userId;
-  (global as any).mongoose.__userContext = userId;
-
-  // Load user from MongoDB
-  const user = await UserModel.findOne({ clerkId: userId });
-  if (!user) {
-    throw new ApiError(HttpStatus.FORBIDDEN, 'User not found in database');
-  }
-
-  (req as any).user = user;
-
-  next();
-});
+//  requireAuth({ signInUrl: process.env.CLERK_SIGN_IN_URL })

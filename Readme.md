@@ -109,7 +109,16 @@ DB -
 userName : toolsspritegenix
 password : mvFpkn0YmdPREvko
 
-ngrok http 3000 --domain=fluent-similarly-shrimp.ngrok-free.app 
+ngrok http 4000 --domain=fluent-similarly-shrimp.ngrok-free.app 
 after bun run dev
 
 https://fluent-similarly-shrimp.ngrok-free.app/api/v1/internal/clerk/user-created
+
+
+curl -i -X OPTIONS https://fluent-similarly-shrimp.ngrok-free.app/api/v1/users/me `
+-H "Origin: http://localhost:3000" `
+-H "Access-Control-Request-Method: GET"
+
+curl -i -X OPTIONS http://localhost:4000/api/v1/users/me `
+>>   -H "Origin: http://localhost:3000" `
+>>   -H "Access-Control-Request-Method: GET"

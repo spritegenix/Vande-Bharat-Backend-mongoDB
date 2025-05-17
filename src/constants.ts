@@ -6,3 +6,122 @@ export const UserRole = {
 } as const;
 
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+// ----------------USER------------------------------------// 
+export const ALLOWED_FIELDS = new Set([
+  'name',
+  'email',
+  'mobileNumber',
+  'countryCode',
+  'address',
+  'interest',
+  'socialLinks',
+  'likeCount',
+  'followerCount',
+  'followingCount',
+  'avatar',
+  'banner',
+  'slug',
+  'bio',
+  'country',
+  'city',
+  'state',
+  'pincode',
+  'isVerified',
+  'role',
+  'isHidden',
+  'isDeleted',
+  'deletedAt',
+  'isBlocked',
+  'updatedAt',
+]);
+
+export const DEFAULT_FIELDS = 'name email avatar slug';
+// ---------------------------------------------------------- //
+
+
+
+export const apis = {
+  domain: 'https://fluent-similarly-shrimp.ngrok-free.app',
+  user: {
+    POST: [
+      '/api/v1/internal/clerk/user-created',
+    ],
+    PATCH: [
+      '/api/v1/users/me',
+      {
+        "name": "SpriteGenix Tools pankaj",
+        "email": "tools.spritegenix@gmail.com",
+        "slug": "spritegenix-tools",
+        "avatar": "https://img.clerk.com/avatar.jpg",
+        "banner": "https://img.clerk.com/banner.jpg",
+        "bio": "Building cutting-edge tools for developers.",
+        "interest": ["AI", "Web Development", "Automation"],
+        "socialLinks": [
+          "https://twitter.com/spritegenix",
+          "https://github.com/spritegenix"
+        ],
+        "mobileNumber": "9876543210",
+        "countryCode": "+91",
+        "address": "123 Developer Lane",
+        "city": "Bengaluru",
+        "state": "Karnataka",
+        "country": "Bharat",
+        "pincode": "560001",
+        "isHidden": false
+      }
+    ],
+    GET: [
+      '/api/v1/users/me',
+      '/api/v1/users/me?fields=',
+      [...ALLOWED_FIELDS]
+    ]
+  },
+  media: {
+    POST: [
+      '/api/v1/media/upload-url',
+    ],
+  }
+}
+
+export const countries = [
+  "Afghanistan", "Albania", "Algeria", "Andorra", "Angola",
+  "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
+  "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados",
+  "Belarus", "Belgium", "Belize", "Benin", "Bharat", "Bhutan",
+  "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei",
+  "Bulgaria", "Burkina Faso", "Burundi", "Cabo Verde", "Cambodia",
+  "Cameroon", "Canada", "Central African Republic", "Chad", "Chile",
+  "China", "Colombia", "Comoros", "Congo (Congo-Brazzaville)", "Costa Rica",
+  "Croatia", "Cuba", "Cyprus", "Czech Republic (Czechia)", "Democratic Republic of the Congo",
+  "Denmark", "Djibouti", "Dominica", "Dominican Republic", "Ecuador",
+  "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia",
+  "Eswatini (fmr. Swaziland)", "Ethiopia", "Fiji", "Finland", "France",
+  "Gabon", "Gambia", "Georgia", "Germany", "Ghana",
+  "Greece", "Grenada", "Guatemala", "Guinea", "Guinea-Bissau",
+  "Guyana", "Haiti", "Honduras", "Hungary", "Iceland",
+  "Indonesia", "Iran", "Iraq", "Ireland",
+  "Israel", "Italy", "Jamaica", "Japan", "Jordan",
+  "Kazakhstan", "Kenya", "Kiribati", "Kuwait", "Kyrgyzstan",
+  "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia",
+  "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Madagascar",
+  "Malawi", "Malaysia", "Maldives", "Mali", "Malta",
+  "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia",
+  "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco",
+  "Mozambique", "Myanmar (formerly Burma)", "Namibia", "Nauru", "Nepal",
+  "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria",
+  "North Korea", "North Macedonia", "Norway", "Oman", "Pakistan",
+  "Palau", "Palestine State", "Panama", "Papua New Guinea", "Paraguay",
+  "Peru", "Philippines", "Poland", "Portugal", "Qatar",
+  "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis", "Saint Lucia",
+  "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia",
+  "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore",
+  "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa",
+  "South Korea", "South Sudan", "Spain", "Sri Lanka", "Sudan",
+  "Suriname", "Sweden", "Switzerland", "Syria", "Tajikistan",
+  "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga",
+  "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu",
+  "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States of America",
+  "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City", "Venezuela",
+  "Vietnam", "Yemen", "Zambia", "Zimbabwe"
+] as const;
+

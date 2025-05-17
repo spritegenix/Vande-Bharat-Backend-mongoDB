@@ -6,11 +6,11 @@ import cors from "cors";
 // import cookieParser from "cookie-parser";
 import { env } from "@/config/zodSafeEnv";
 import connectDB from "@/config/db";
-import  errorHandler  from "@/middlewares/error.middleware";
+import errorHandler from "@/middlewares/error.middleware";
 import routes from "@/routes"; // All combined route imports
 import { clerkMiddleware } from '@clerk/express'
-import { ApiError } from "./utils/ApiError";
 import { setupSwagger } from "./utils/swagger.utils";
+import { apis } from "./constants";
 const app: Application = express();
 
 setupSwagger(app);
@@ -20,7 +20,25 @@ connectDB();
 
 // Middleware Stack
 // app.use(helmet());
-app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://expectations-gun-singer-analysts.trycloudflare.com'
+];
+
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: any) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+
 // app.use(compression());
 // app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
@@ -32,7 +50,7 @@ app.use(clerkMiddleware())
 
 // Health Check
 app.get("/health", (req: Request, res: Response) => {
-    res.status(200).json({ status: "OK", environment: env.NODE_ENV });
+    res.status(200).json({ status: "OK", environment: env.NODE_ENV, apis: apis });
 });
 
 // API Routes
