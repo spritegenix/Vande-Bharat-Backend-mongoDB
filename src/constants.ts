@@ -80,6 +80,41 @@ export const apis = {
     POST: [
       '/api/v1/media/upload-url',
     ],
+  },
+  post: {
+    POST: [
+      '/api/v1/posts/create-post',
+      {
+        "content": "Check out our latest update with media attachments!",
+        "tags": ["update", "release", "media"],
+        "pageId": "6646b5a72f05a34dc3f7a9b1",
+        "communityId": "6646b5c12f05a34dc3f7a9b2",
+        "attachments": [
+          {
+            "url": "https://your-s3-bucket.s3.amazonaws.com/uploads/image123.jpg",
+            "type": "IMAGE",
+            "fileName": "image123.jpg",
+            "mimeType": "image/jpeg",
+            "size": 204800,
+            "width": 1280,
+            "height": 720,
+            "uploadedAt": "2025-05-18T09:00:00.000Z"
+          },
+          {
+            "url": "https://your-s3-bucket.s3.amazonaws.com/uploads/video456.mp4",
+            "type": "VIDEO",
+            "fileName": "video456.mp4",
+            "mimeType": "video/mp4",
+            "size": 52428800,
+            "duration": 120,
+            "uploadedAt": "2025-05-18T09:05:00.000Z"
+          }
+        ]
+      }
+    ],
+    GET: [
+      '/api/v1/posts/all-posts',
+    ]
   }
 }
 

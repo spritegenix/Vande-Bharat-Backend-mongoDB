@@ -1,17 +1,17 @@
 import { ApiError } from "@/utils/ApiError";
 import { asyncHandler } from "@/utils/asyncHandler";
-import { createPostSchema } from "@/validators/v1/post.validators";
+import { createPostSchema, updatePostSchema } from "@/validators/v1/post.validators";
 import { getAuth } from '@clerk/express';
 import httpStatus from 'http-status';
 import * as postService from '@/services/v1/post.service';
 import mongoose from "mongoose";
 
 const fetchPosts = asyncHandler(async (req, res) => {
-    const { userId: clerkId } = getAuth(req);
+    const { userId } = getAuth(req);
     const { sort, limit, cursor } = req.query;
 
     const result = await postService.getPosts({
-        clerkId: clerkId || undefined,
+        userId: userId || undefined,
         sort: (sort as 'popular' | 'newest') || 'popular',
         limit: parseInt(limit as string) || 10,
         cursor: cursor as string,
@@ -25,11 +25,10 @@ const fetchPosts = asyncHandler(async (req, res) => {
 });
 
 const createPost = asyncHandler(async (req, res) => {
-    const { userId: clerkId } = getAuth(req);
-    if (!clerkId) {
+    const { userId } = getAuth(req);
+    if (!userId) {
         throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
     }
-
     const parsed = createPostSchema.safeParse(req.body);
     if (!parsed.success) {
         const errors = parsed.error.errors.map((e) => ({
@@ -40,7 +39,7 @@ const createPost = asyncHandler(async (req, res) => {
     }
 
     const post = await postService.createPost({
-        clerkId,
+        userId,
         data: parsed.data,
     });
 
@@ -51,29 +50,66 @@ const createPost = asyncHandler(async (req, res) => {
     });
 });
 
-const fetchPostById = asyncHandler(async (req, res) => {
-  const { userId: clerkId } = getAuth(req);
-  const { id } = req.params;
+const updatePost = asyncHandler(async (req, res) => {
+    const { userId } = getAuth(req);
+    if (!userId) {
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
+    }
 
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID');
-  }
+    const postId = req.params.postId;
+    const parsed = updatePostSchema.safeParse(req.body);
+    if (!parsed.success) {
+        const errors = parsed.error.errors.map((e) => ({
+            path: e.path.join('.'),
+            message: e.message,
+        }));
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Validation error', errors);
+    }
 
-  const post = await postService.getPostById(id, clerkId);
+    const updatedPost = await postService.updatePost({
+        postId,
+        userId,
+        data: parsed.data,
+    });
 
-  if (!post) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Post not found');
-  }
-
-  res.status(200).json({
-    success: true,
-    data: post,
-  });
+    res.status(httpStatus.OK).json({
+        success: true,
+        message: 'Post updated successfully',
+        data: updatedPost,
+    });
 });
 
-const updatePost = asyncHandler(async (req, res) => { });
+const deletePost = asyncHandler(async (req, res) => {
+    const { userId } = getAuth(req);
+    if (!userId) {
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
+    }
+    const postId = req.params.postId;
+    await postService.deletePost({ postId, userId, });
+    res.status(httpStatus.OK).json({
+        success: true,
+        message: 'Post deleted successfully',
+    });
+});
 
-const deletePost = asyncHandler(async (req, res) => { });
+const fetchPostById = asyncHandler(async (req, res) => {
+    const { userId } = getAuth(req);
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID');
+    }
+    const post = await postService.getPostById(id, userId);
+
+    if (!post) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Post not found');
+    }
+
+    res.status(200).json({
+        success: true,
+        data: post,
+    });
+});
 
 const likePost = asyncHandler(async (req, res) => { });
 
@@ -87,4 +123,4 @@ const fetchPostLikes = asyncHandler(async (req, res) => { });
 
 const fetchPostReplies = asyncHandler(async (req, res) => { });
 
-export { fetchPosts, createPost, fetchPostById };
+export { fetchPosts, createPost, updatePost, deletePost, fetchPostById };

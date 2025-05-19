@@ -4,7 +4,7 @@ import { UserRole } from '@/constants';
 
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
-  clerkId: string;
+  userId: string;  // Clerk ID (user_xxx)
   slug: string;
   email: string;
   name: string;
@@ -51,7 +51,7 @@ export interface IUser extends Document {
 
 const userSchema = new Schema<IUser>(
   {
-    clerkId: { type: String, required: true, unique: true, index: true },
+    userId: { type: String, required: true, unique: true, index: true }, // Clerk ID
     slug: { type: String, required: true, unique: true, index: true },
     email: { type: String, required: true, unique: true, index: true },
     name: { type: String, required: true },

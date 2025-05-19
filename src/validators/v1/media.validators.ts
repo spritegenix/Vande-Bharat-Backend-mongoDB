@@ -1,5 +1,3 @@
-// src/validators/media.validators.ts
-
 import { z } from 'zod';
 
 export const MAX_IMAGE_SIZE = 5 * 1024 * 1024;

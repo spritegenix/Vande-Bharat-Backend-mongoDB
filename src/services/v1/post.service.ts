@@ -7,185 +7,195 @@ import { ApiError } from '@/utils/ApiError';
 import httpStatus from 'http-status';
 import dayjs from 'dayjs';
 import { Types } from 'mongoose';
-
-interface CreatePostInput {
-  clerkId: string;
-  data: {
-    content: string;
-    tags?: string[];
-    pageId?: string;
-    communityId?: string;
-    attachments?: any[];
-  };
-}
+import { createPostInput, UpdatePostInput } from '@/validators/v1/post.validators';
 
 interface GetPostsParams {
-  clerkId?: string;
+  userId?: string;
   sort?: 'popular' | 'newest';
   limit?: number;
   cursor?: string; // Format: base64 encoded JSON { createdAt, _id }
 }
 
-export const createPost = async ({ clerkId, data }: CreatePostInput) => {
-  const mongoUser = await UserModel.findOne({ clerkId }) as IUser;
-  if (!mongoUser || !mongoUser._id) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, 'User not found');
-  }
+export const createPost = async ({ userId, data, }: { userId: string; data: createPostInput; }) => {
+  const { content, tags, attachments, pageId, communityId, isHidden } = data;
 
-  const { content, tags, attachments, pageId, communityId } = data;
-
-  // Check if user is owner of the page
+  // Validate page ownership
   if (pageId) {
-    const page = await Page.findById(pageId).select('owner');
-    if (!page || !page.owner.equals(mongoUser._id)) {
+    const page = await Page.findOne({ _id: pageId, isDeleted: false }).select('owner');
+    if (!page || !page.owner.equals(userId)) {
       throw new ApiError(httpStatus.FORBIDDEN, 'You are not the owner of this page');
     }
   }
 
-  // Check if user is owner or member of the community
+  // Validate community membership/ownership/admin
   if (communityId) {
-    const community = await Community.findById(communityId).select('owner members admins');
-    if (
-      !community ||
-      (!community.owner.equals(mongoUser._id) &&
-        !community.members.some((m) => m.equals(mongoUser._id))) &&
-        !community.admins.some((a) => a.equals(mongoUser._id))
-    ) {
-      throw new ApiError(httpStatus.FORBIDDEN, 'You are not a member or owner or admin of this community');
+    const community = await Community.findOne({ _id: communityId, isDeleted: false }).select('owner members admins');
+
+    const isAuthorized =
+      community?.owner?.equals(userId) ||
+      community?.members?.some((m) => m.equals(userId)) ||
+      community?.admins?.some((a) => a.equals(userId));
+
+    if (!community || !isAuthorized) {
+      throw new ApiError(
+        httpStatus.FORBIDDEN,
+        'You are not a member, owner, or admin of this community'
+      );
     }
   }
 
-  const post = await PostModel.create({
+  // Create new post
+  const newPost = await PostModel.create({
     content,
-    tags,
-    attachments,
-    userId: mongoUser._id,
-    pageId: pageId ? new mongoose.Types.ObjectId(pageId) : undefined,
-    communityId: communityId ? new mongoose.Types.ObjectId(communityId) : undefined,
+    tags: tags || [],
+    userId: userId,
+    pageId: pageId ? new Types.ObjectId(pageId) : undefined,
+    communityId: communityId ? new Types.ObjectId(communityId) : undefined,
+    attachments: attachments || [],
+    isHidden: isHidden || false,
   });
+  if (!newPost) {
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to create post');
+  }
+
+  return newPost;
+};
+
+export const updatePost = async ({ postId, userId, data, }: { postId: string; userId: string; data: UpdatePostInput; }) => {
+  if (!Types.ObjectId.isValid(postId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID');
+  }
+
+  const post = await PostModel.findOne({ _id: postId, isDeleted: false, });
+  if (!post) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Post not found or deleted');
+  }
+
+  if (post.userId.toString() !== userId) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'You are not the owner of this post');
+  }
+  const { content, tags, attachments, isHidden } = data;
+
+  // Update post
+  // Update post fields
+  if (content !== undefined) post.content = content;
+  if (tags !== undefined) post.tags = tags;
+  if (attachments !== undefined) post.attachments = attachments;
+  if (isHidden !== undefined) post.isHidden = isHidden;
+
+  await post.save();
+
+  return post;
+
+};
+
+export const deletePost = async ({ postId, userId }: { postId: string; userId: string; }) => {
+  if (!Types.ObjectId.isValid(postId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID');
+  }
+
+  const post = await PostModel.findOne({ _id: postId, isDeleted: false, });
+  if (!post) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Post not found or deleted already');
+  }
+
+  if (post.userId.toString() !== userId) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'You are not the owner of this post');
+  }
+
+  post.isDeleted = true;
+  await post.save();
 
   return post;
 };
 
-export const getPosts = async ({ clerkId, sort = 'popular', limit = 10, cursor }: GetPostsParams) => {
-  const cutoff = dayjs().subtract(36, 'hour').toDate();
-  const now = new Date();
-
-  let followedUserIds: Types.ObjectId[] = [];
+export const getPosts = async ({ userId, limit = 10, cursor }: GetPostsParams) => {
+  let followedUserIds: string[] = [];
   let followedPageIds: Types.ObjectId[] = [];
 
-  if (clerkId) {
-    const user = await UserModel.findOne({ clerkId }).select('following pages');
-    followedUserIds = user?.following ?? [];
-    followedPageIds = user?.pages ?? [];
+  if (userId) {
+    const user = await UserModel.findOne({ userId }).select('following pages').lean();
+    followedUserIds = user?.following?.map(id => id.toString()) || [];
+    followedPageIds = user?.pages || [];
   }
 
-  const matchBase: any = { isDeleted: false };
-  const matchRecent: any = {
-    ...matchBase,
-    createdAt: { $gte: cutoff },
-    ...(clerkId && {
-      $or: [
-        { userId: { $in: followedUserIds } },
-        { pageId: { $in: followedPageIds } },
-      ],
-    }),
-  };
-
-  const sortField = sort === 'popular' ? 'popularityScore' : 'createdAt';
-
-  // Decode cursor
+  // Handle cursor decoding
   let cursorFilter: any = {};
   if (cursor) {
     const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString());
-    if (sort === 'popular') {
-      cursorFilter = {
-        $or: [
-          { popularityScore: { $lt: decoded.popularityScore } },
-          {
-            popularityScore: decoded.popularityScore,
-            _id: { $lt: new Types.ObjectId(decoded._id) },
-          },
-        ],
-      };
-    } else {
-      cursorFilter = {
-        $or: [
-          { createdAt: { $lt: new Date(decoded.createdAt) } },
-          {
-            createdAt: new Date(decoded.createdAt),
-            _id: { $lt: new Types.ObjectId(decoded._id) },
-          },
-        ],
-      };
-    }
+    cursorFilter = {
+      $or: [
+        { createdAt: { $lt: new Date(decoded.createdAt) } },
+        {
+          createdAt: new Date(decoded.createdAt),
+          _id: { $lt: new Types.ObjectId(decoded._id) },
+        },
+      ],
+    };
   }
 
-  const pipeline: any[] = [
-    { $match: matchRecent },
-    {
-      $addFields: {
-        popularityScore: {
-          $divide: [
-            { $add: ['$likeCount', { $size: '$comments' }] },
-            {
-              $max: [1, {
-                $divide: [
-                  { $subtract: [now, '$createdAt'] },
-                  1000 * 60 * 60,
-                ],
-              }],
-            },
-          ],
-        },
-      },
-    },
-    ...(cursor ? [{ $match: cursorFilter }] : []),
-    { $sort: { [sortField]: -1, _id: -1 } },
-    { $limit: limit + 1 }, // Fetch one extra to detect `hasNextPage`
-    {
-      $lookup: {
-        from: 'users',
-        localField: 'userId',
-        foreignField: '_id',
-        as: 'user',
-      },
-    },
-    { $unwind: '$user' },
-    {
-      $lookup: {
-        from: 'pages',
-        localField: 'pageId',
-        foreignField: '_id',
-        as: 'page',
-      },
-    },
-    {
-      $lookup: {
-        from: 'communities',
-        localField: 'communityId',
-        foreignField: '_id',
-        as: 'community',
-      },
-    },
-    { $unwind: { path: '$page', preserveNullAndEmptyArrays: true } },
-    { $unwind: { path: '$community', preserveNullAndEmptyArrays: true } },
-  ];
+  // Build base match
+  const baseMatch = {
+    isDeleted: false,
+    ...cursorFilter,
+  };
 
-  const results = await PostModel.aggregate(pipeline);
+  // Stage 1: Followed users/pages
+  const followedMatch = userId
+    ? {
+        ...baseMatch,
+        $or: [
+          { userId: { $in: followedUserIds } },
+          { pageId: { $in: followedPageIds } },
+        ],
+      }
+    : null;
 
-  const posts = results.slice(0, limit);
-  const hasNextPage = results.length > limit;
+  const followedPosts = userId
+    ? await PostModel.find(followedMatch)
+        .sort({ createdAt: -1, _id: -1 })
+        .limit(limit)
+        .lean()
+    : [];
+
+  let remainingPosts: any[] = [];
+
+  // If fewer than `limit`, fill from non-followed
+  if (userId && followedPosts.length < limit) {
+    const excludeIds = followedPosts.map(p => p._id);
+    const excludeMatch = {
+      ...baseMatch,
+      _id: { $nin: excludeIds },
+      $nor: [
+        { userId: { $in: followedUserIds } },
+        { pageId: { $in: followedPageIds } },
+      ],
+    };
+
+    remainingPosts = await PostModel.find(excludeMatch)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit - followedPosts.length)
+      .lean();
+  }
+
+  const publicPosts = !userId
+    ? await PostModel.find(baseMatch)
+        .sort({ createdAt: -1, _id: -1 })
+        .limit(limit)
+        .lean()
+    : [];
+
+  const posts = userId ? [...followedPosts, ...remainingPosts] : publicPosts;
+  const hasNextPage = posts.length === limit;
 
   let nextCursor = null;
   if (hasNextPage) {
     const last = posts[posts.length - 1];
     nextCursor = Buffer.from(
-      JSON.stringify(
-        sort === 'popular'
-          ? { popularityScore: last.popularityScore, _id: last._id }
-          : { createdAt: last.createdAt, _id: last._id }
-      )
+      JSON.stringify({
+        createdAt: last.createdAt,
+        _id: last._id,
+      })
     ).toString('base64');
   }
 
@@ -195,25 +205,33 @@ export const getPosts = async ({ clerkId, sort = 'popular', limit = 10, cursor }
   };
 };
 
-export const getPostById = async (postId: string, clerkId?: string | null) => {
-  // Optional: Fetch user if clerkId provided
-  let mongoUserId: Types.ObjectId | undefined;
-  if (clerkId) {
-    const user = await UserModel.findOne({ clerkId }).select('_id');
-    mongoUserId = user?._id;
-  }
-
+export const getPostById = async (postId: string, userId?: string | null) => {
   const post = await PostModel.findById(postId)
-    .populate('userId', 'name avatar')
+    .populate({
+      path: 'userId',
+      model: 'User',
+      localField: 'userId',
+      foreignField: 'userId', // <-- match on string field, not _id
+      justOne: true,
+      select: 'name avatar slug',
+    })
     .populate('pageId', 'name avatar slug')
     .populate('communityId', 'name avatar slug')
     .lean();
 
-  if (!post || post.isDeleted) return null;
+  if (!post || post.isDeleted) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Post not found or deleted already');
+  }
+
+  const isLiked = userId ? post.likes?.includes(userId) : false;
+  const isBookmarked = userId ? post.bookmarks?.includes(userId) : false;
 
   return {
     ...post,
-    isLiked: mongoUserId ? post.likes?.some((id: any) => id.equals(mongoUserId)) : false,
-    isBookmarked: mongoUserId ? post.bookmarks?.some((id: any) => id.equals(mongoUserId)) : false,
+    isLiked,
+    isBookmarked,
   };
 };
+
+
+// post_id: 682b60fd62a516d8f4671268

@@ -10,7 +10,7 @@ router.use("/internal", authRoutes);
 
 router.use("/users", userRoutes);
 
-// router.use("/posts", postRoutes);
+router.use("/posts", postRoutes);
 
 router.get("/health", (_req: Request, res: Response) => {
     res.status(200).json({ status: "OK", environment: env.NODE_ENV,  });

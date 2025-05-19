@@ -6,14 +6,14 @@ import httpStatus from 'http-status';
 import { asyncHandler } from '@/utils/asyncHandler';
 
 export const requireRole = (role: UserRole) => {
-  return asyncHandler( async (req, res, next) => {
+  return asyncHandler(async (req, res, next) => {
     try {
       const { userId } = getAuth(req);
       if (!userId) {
         res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized' });
         return;
       }
-      const user = await UserModel.findOne({ clerkId: userId });
+      const user = await UserModel.findOne({ userId: userId });
       if (!user || user.isDeleted) {
         res.status(httpStatus.NOT_FOUND).json({ message: 'User not found' });
         return;

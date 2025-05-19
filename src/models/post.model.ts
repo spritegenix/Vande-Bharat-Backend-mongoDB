@@ -3,19 +3,21 @@ import { auditPlugin } from '@/plugins/audit.plugin';
 import { IMedia, mediaSchema } from './media.model';
 
 export interface IPost extends Document {
+  _id: Types.ObjectId;
   content: string;
   tags?: string[];
-  userId: Types.ObjectId;
+  userId: string;
   pageId?: Types.ObjectId | null;
   communityId?: Types.ObjectId | null;
   attachments?: IMedia[];
-  likes: Types.ObjectId[];
-  bookmarks: Types.ObjectId[];
+  likes: String[];
+  bookmarks: String[];
   comments: Types.ObjectId[];
   linkedNotifications: Types.ObjectId[];
   likeCount: number;
   bookmarkCount: number;
   isDeleted: boolean;
+  isHidden: boolean;
   deletedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -30,7 +32,7 @@ const postSchema = new Schema<IPost>(
       maxlength: 1000,
     },
     tags: [{ type: String }],
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    userId: { type: String, ref: 'User', required: true },
     pageId: { type: Schema.Types.ObjectId, ref: 'Page', default: null },
     communityId: { type: Schema.Types.ObjectId, ref: 'Community', default: null },
     attachments: {
@@ -42,13 +44,14 @@ const postSchema = new Schema<IPost>(
         message: 'Maximum of 10 attachments allowed.',
       },
     },
-    likes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-    bookmarks: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    likes: [{ type: String, ref: 'User' }],
+    bookmarks: [{ type: String, ref: 'User' }],
     comments: [{ type: Schema.Types.ObjectId, ref: 'Comment' }],
     linkedNotifications: [{ type: Schema.Types.ObjectId, ref: 'Notification' }],
     likeCount: { type: Number, default: 0 },
     bookmarkCount: { type: Number, default: 0 },
     isDeleted: { type: Boolean, default: false },
+    isHidden: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
   },
   {
@@ -73,6 +76,7 @@ postSchema.index({ pageId: 1 });
 postSchema.index({ communityId: 1 });
 postSchema.index({ createdAt: -1, likeCount: -1 }); // for sorting by popularity
 
+// ✅ Attach audit + soft delete plugin
 postSchema.plugin(auditPlugin, { modelName: 'Post' });
 
 export const PostModel = model<IPost>('Post', postSchema);

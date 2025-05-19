@@ -56,6 +56,11 @@ app.get("/health", (req: Request, res: Response) => {
 // API Routes
 app.use("/api", routes);
 
+app.use((req, res, next) => {
+  console.log(`📥 ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // 404 handler
 // app.all("*", (req: Request, _res: Response, next: NextFunction) => {
 //   next(new ApiError(404, `Route not found`));

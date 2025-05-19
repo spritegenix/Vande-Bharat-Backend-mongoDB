@@ -10,7 +10,7 @@ export interface IMedia {
   width?: number;
   height?: number;
   duration?: number;
-  uploadedAt: Date;
+  uploadedAt?: Date;
 }
 
 export const mediaSchema = new Schema<IMedia>(

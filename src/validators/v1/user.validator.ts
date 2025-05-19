@@ -1,39 +1,59 @@
-import { countries, UserRole } from '@/constants';
 import { z } from 'zod';
+import { countries, UserRole } from '@/constants';
 
-// Optional: You can replace these enums with dynamic country/state/city lists.
-const countryEnum = z.enum(countries);
-const stateEnum = z.string().min(1).max(100);
-const cityEnum = z.string().min(1).max(100);
+const countryEnum = z.enum(countries, {
+  required_error: 'Country is required',
+  invalid_type_error: 'Country must be a valid enum value',
+});
 
-const countryCodeRegex = /^\+\d{1,4}$/; // +1, +91, +44 etc.
-const mobileNumberRegex = /^[6-9]\d{9}$/; // Basic Indian mobile number pattern
+const stateEnum = z
+  .string({ required_error: 'State is required' })
+  .min(1, 'State must not be empty')
+  .max(100, 'State name too long');
+
+const cityEnum = z
+  .string({ required_error: 'City is required' })
+  .min(1, 'City must not be empty')
+  .max(100, 'City name too long');
+
+const countryCodeRegex = /^\+\d{1,4}$/; // e.g., +91
+const mobileNumberRegex = /^[6-9]\d{9}$/; // Basic Indian pattern
 const pincodeRegex = /^\d{4,10}$/;
 
-const socialLinksSchema = z.array(z.string().url()).max(10);
-const interestSchema = z.array(z.string().min(1).max(50)).max(20);
+const socialLinksSchema = z
+  .array(z.string().url({ message: 'Each social link must be a valid URL' }))
+  .max(10, 'Maximum of 10 social links allowed');
+
+const interestSchema = z
+  .array(z.string().min(1, 'Interest must not be empty').max(50, 'Interest too long'))
+  .max(20, 'Maximum of 20 interests allowed');
 
 export const userBaseSchema = z.object({
-  name: z.string().min(1).max(100),
-  email: z.string().email(),
-  slug: z.string().min(1).optional(),
+  name: z
+    .string({ required_error: 'Name is required' })
+    .min(1, 'Name must not be empty')
+    .max(100, 'Name too long'),
 
-  avatar: z.string().url().optional(),
-  banner: z.string().url().optional(),
-  bio: z.string().max(500).optional(),
+  email: z.string({ required_error: 'Email is required' }).email('Invalid email format'),
+
+  slug: z.string().min(1, 'Slug must not be empty').optional(),
+
+  avatar: z.string().url('Avatar must be a valid URL').optional(),
+  banner: z.string().url('Banner must be a valid URL').optional(),
+
+  bio: z.string().max(500, 'Bio too long').optional(),
   interest: interestSchema.optional(),
-
   socialLinks: socialLinksSchema.optional(),
 
   mobileNumber: z.string().regex(mobileNumberRegex, {
-    message: 'Invalid mobile number',
+    message: 'Invalid mobile number (should be a 10-digit Indian number)',
   }).optional(),
 
   countryCode: z.string().regex(countryCodeRegex, {
     message: 'Invalid country code (expected format: +91)',
   }).optional(),
 
-  address: z.string().max(200).optional(),
+  address: z.string().max(200, 'Address too long').optional(),
   city: cityEnum.optional(),
   state: stateEnum.optional(),
   country: countryEnum.optional(),
@@ -42,14 +62,19 @@ export const userBaseSchema = z.object({
     message: 'Invalid pincode',
   }).optional(),
 
-  isHidden: z.boolean().optional(),
+  isHidden: z.boolean({ invalid_type_error: 'isHidden must be a boolean' }).optional(),
 });
 
 export const updateUserSchema = userBaseSchema.partial();
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
 export const updateUserByAdminSchema = userBaseSchema.extend({
-  role: z.nativeEnum(UserRole).optional(),
-  isVerified: z.boolean().optional(),
-  isBlocked: z.boolean().optional(),
+  role: z.nativeEnum(UserRole, {
+    invalid_type_error: 'Invalid user role',
+  }).optional(),
+
+  isVerified: z.boolean({ invalid_type_error: 'isVerified must be a boolean' }).optional(),
+  isBlocked: z.boolean({ invalid_type_error: 'isBlocked must be a boolean' }).optional(),
 });
+
+export type UpdateUserByAdminInput = z.infer<typeof updateUserByAdminSchema>;

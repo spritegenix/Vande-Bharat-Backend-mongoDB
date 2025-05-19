@@ -30,7 +30,7 @@ const updateUser: RequestHandler = asyncHandler(async (req, res) => {
     }
     const parsed = updateUserSchema.safeParse(req.body);
     if (!parsed.success) {
-        return res.status(400).json({ message: 'Validation failed', errors: parsed.error.errors });
+        return res.status(httpStatus.BAD_REQUEST).json({ message: 'Validation failed', errors: parsed.error.errors });
     }
 
     const updatedUser = await userService.updateUser(userId, parsed.data);

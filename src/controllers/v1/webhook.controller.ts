@@ -15,19 +15,19 @@ export const handleClerkUserCreated = asyncHandler(async (req, res) => {
   }
 
   const data = parsed.data.data; // <- Extract the user object
-  const clerkId = data.id;
+  const userId = data.id;
   const email = data.email_addresses?.[0]?.email_address ?? '';
   const name = `${data.first_name ?? ''} ${data.last_name ?? ''}`.trim();
   const slug = await generateSlug(name);
   const avatar = data.image_url;
 
-  const existing = await UserModel.findOne({ clerkId });
+  const existing = await UserModel.findOne({ userId });
   if (existing) {
     return res.status(200).json({ message: 'User already exists' });
   }
 
   const newUser = await UserModel.create({
-    clerkId,
+    userId,
     email,
     name,
     avatar,

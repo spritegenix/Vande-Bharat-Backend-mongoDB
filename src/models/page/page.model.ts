@@ -50,7 +50,6 @@ const pageSchema = new Schema<IPage>(
   { timestamps: true }
 );
 
-pageSchema.plugin(auditPlugin);
-pageSchema.index({ slug: 1 });
+pageSchema.plugin(auditPlugin, { modelName: 'Page' });
 
 export const Page = model<IPage>('Page', pageSchema);
