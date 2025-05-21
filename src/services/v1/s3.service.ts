@@ -35,9 +35,9 @@ export const generatePresignedUrl = async ({
     };
     const command = new PutObjectCommand(params);
     const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 60 });
-    const fileUrl = `https://${env.STORAGE_AWS_S3_BUCKET_NAME}.s3.${env.STORAGE_AWS_REGION}.amazonaws.com/${encodeURIComponent(fileKey)}`;
+    const fileUrl = `https://${env.STORAGE_AWS_S3_BUCKET_NAME}.s3.${env.STORAGE_AWS_REGION}.amazonaws.com/${fileKey}`;
 
-    return { uploadUrl, fileUrl, };
+    return { uploadUrl, fileUrl };
 };
 
 // Delete file from S3

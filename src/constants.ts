@@ -36,10 +36,24 @@ export const ALLOWED_FIELDS = new Set([
 ]);
 
 export const DEFAULT_FIELDS = 'name email avatar slug';
-// ---------------------------------------------------------- //
+
+// -----------------POSTS------------------------------------//
+export const POSTS_PAGE_LIMIT = 10;
+
+//----------------- POST COMMENTS or REPLIES----------------- //
+export const COMMENTS_PAGE_LIMIT = 5;
+export const REPLIES_PAGE_LIMIT = 5;
 
 
 
+
+
+
+
+
+
+
+// -------------------------------------------------------------- //
 export const apis = {
   domain: 'https://fluent-similarly-shrimp.ngrok-free.app',
   user: {
@@ -112,10 +126,43 @@ export const apis = {
         ]
       }
     ],
+    PATCH: [
+      '/api/v1/posts/:id',
+    ],
+    DELETE: [
+      '/api/v1/posts/:id',
+    ],
     GET: [
       '/api/v1/posts/all-posts',
-    ]
-  }
+      '/api/v1/posts/:id',
+    ],
+
+  },
+  commentsAndReplies: {
+    POST: [
+      '/api/v1/posts/:postId/comments/create-comment',
+      {
+        "content": "This is a new comment updated"
+      },
+      {
+        "content": "This is a reply to comment updated",
+        "parentCommentId": "682c9f531e0af08c4579d7da"
+      }
+    ],
+    PATCH: [
+      '/api/v1/posts/comments/:commentId',
+    ],
+    DELETE: [
+      '/api/v1/posts/comments/:commentId',
+    ],
+    GET: [
+      '/api/v1/posts/:postId/comments',
+      '/api/v1/posts/:postId/comments?cursor=66523ffaa8c9d1e8b9e8f127 ',
+      '/api/v1/posts/comments/:commentId',
+      '/api/v1/posts/comments/:commentId/replies',
+      '/api/v1/posts/comments/:commentId/replies?cursor=66523ffaa8c9d1e8b9e8f127 ',
+    ],
+  },
 }
 
 export const countries = [

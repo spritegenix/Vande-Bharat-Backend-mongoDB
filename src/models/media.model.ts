@@ -1,4 +1,4 @@
-import { Schema,Types } from 'mongoose';
+import { Schema, Types } from 'mongoose';
 
 export interface IMedia {
   _id?: Types.ObjectId;
@@ -20,7 +20,7 @@ export const mediaSchema = new Schema<IMedia>(
       required: true,
       validate: {
         validator: (v: string) =>
-          /^https?:\/\/.+\.(jpg|jpeg|png|webp|mp4|mov|avi)$/i.test(v),
+          /^https:\/\/[^\s]+$/.test(v), // Matches valid https URLs without enforcing extensions
         message: 'Invalid media URL format.',
       },
     },

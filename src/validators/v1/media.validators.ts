@@ -10,7 +10,7 @@ export const mediaSchema = z
       .string()
       .url()
       .regex(
-        /^https?:\/\/.+\.(jpg|jpeg|png|webp|gif|bmp|svg|mp4|mov|avi|webm|mkv|flv|wmv)$/i,
+        /^https:\/\/[a-zA-Z0-9.-]+\/[\w\-./%]+$/i,
         'Invalid media URL format'
       ),
     type: z.enum(['IMAGE', 'VIDEO']),

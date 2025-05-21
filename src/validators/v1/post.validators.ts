@@ -54,3 +54,17 @@ export const postIdParamSchema = z.object({
       message: 'Invalid Post ID format. Must be a 24-character hex string.',
     }),
 });
+export type PostIdParamInput = z.infer<typeof postIdParamSchema>;
+
+export const commentIdParamSchema = z.object({
+  commentId: z
+    .string({
+      required_error: 'Comment ID is required',
+      invalid_type_error: 'Comment ID must be a string',
+    })
+    .regex(/^[0-9a-fA-F]{24}$/, {
+      message: 'Invalid Comment ID format. Must be a 24-character hex string.',
+    }),
+});
+
+export type CommentIdParamInput = z.infer<typeof commentIdParamSchema>;

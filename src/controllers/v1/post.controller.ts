@@ -5,24 +5,7 @@ import { getAuth } from '@clerk/express';
 import httpStatus from 'http-status';
 import * as postService from '@/services/v1/post.service';
 import mongoose from "mongoose";
-
-const fetchPosts = asyncHandler(async (req, res) => {
-    const { userId } = getAuth(req);
-    const { sort, limit, cursor } = req.query;
-
-    const result = await postService.getPosts({
-        userId: userId || undefined,
-        sort: (sort as 'popular' | 'newest') || 'popular',
-        limit: parseInt(limit as string) || 10,
-        cursor: cursor as string,
-    });
-
-    res.status(200).json({
-        success: true,
-        data: result.posts,
-        nextCursor: result.nextCursor,
-    });
-});
+import { createCommentSchema, updateCommentSchema } from "@/validators/v1/comment.validator";
 
 const createPost = asyncHandler(async (req, res) => {
     const { userId } = getAuth(req);
@@ -111,16 +94,152 @@ const fetchPostById = asyncHandler(async (req, res) => {
     });
 });
 
+const fetchPosts = asyncHandler(async (req, res) => {
+    const { userId } = getAuth(req);
+    const { sort, limit, cursor } = req.query;
+
+    const result = await postService.getPosts({
+        userId: userId || undefined,
+        sort: (sort as 'popular' | 'newest') || 'popular',
+        limit: parseInt(limit as string) || 10,
+        cursor: cursor as string,
+    });
+
+    res.status(200).json({
+        success: true,
+        data: result.posts,
+        nextCursor: result.nextCursor,
+    });
+});
+// ----------------------------------------------------------- //
+
+const createCommentOnPost = asyncHandler(async (req, res) => {
+    // console.log('req.body', req.body);
+    const { userId } = getAuth(req);
+    if (!userId) {
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
+    }
+
+    const { postId } = req.params;
+    // console.log(`"postId": ${postId}, \n "userId": ${userId},\n "req.body": ${req.body}`);
+
+    const parsed = createCommentSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(httpStatus.BAD_REQUEST).json({
+            message: 'Validation Error at controller level',
+            errors: parsed.error.errors,
+        });
+    }
+
+    const comment = await postService.createComment(userId, postId, parsed.data);
+
+    return res.status(httpStatus.CREATED).json({
+        success: true,
+        message: parsed.data.parentCommentId ? 'Reply created successfully' : 'Comment created successfully',
+        data: comment,
+    });
+});
+
+const updateComment = asyncHandler(async (req, res) => {
+    const { userId } = getAuth(req);
+    if (!userId) {
+        return res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized' });
+    }
+
+    const { commentId } = req.params;
+
+    const parsed = updateCommentSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(httpStatus.BAD_REQUEST).json({
+            message: 'Validation Error',
+            errors: parsed.error.errors,
+        });
+    }
+
+    const updated = await postService.updateComment(userId, commentId, parsed.data);
+
+    return res.status(httpStatus.OK).json({
+        success: true,
+        message: 'Comment or reply updated successfully',
+        data: updated,
+    });
+});
+
+const deleteComment = asyncHandler(async (req, res) => {
+    const { userId } = getAuth(req);
+    if (!userId) {
+        return res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized user' });
+    }
+
+    const { commentId } = req.params;
+
+    const deletedComment = await postService.deleteComment(userId, commentId);
+
+    return res.status(httpStatus.OK).json({
+        success: true,
+        message: 'Comment deleted successfully',
+        data: deletedComment,
+    });
+});
+
+const fetchPostComments = asyncHandler(async (req, res) => {
+    const { userId } = getAuth(req);
+    const { postId } = req.params;
+    const { cursor } = req.query;
+    const result = await postService.fetchPostComments(
+        postId,
+        userId ?? undefined,
+        cursor as string
+    );
+
+    res.status(httpStatus.OK).json({
+        success: true,
+        message: 'Comments fetched successfully',
+        data: result,
+    });
+});
+
+const fetchCommentById = asyncHandler(async (req, res) => {
+    const { commentId } = req.params;
+
+    const comment = await postService.fetchCommentById(commentId);
+
+    return res.status(httpStatus.OK).json({
+        success: true,
+        message: 'Comment fetched successfully',
+        data: comment,
+    });
+});
+
+const fetchCommentReplies = asyncHandler(async (req, res) => {
+    const { userId } = getAuth(req);
+  const { commentId } = req.params;
+  const { cursor } = req.query;
+
+  const result = await postService.getRepliesByCommentId(commentId, cursor as string | undefined, userId as string | undefined);
+
+  return res.status(httpStatus.OK).json({
+    success: true,
+    data: result.replies,
+    nextCursor: result.nextCursor
+  });
+});
+
+
+
+
 const likePost = asyncHandler(async (req, res) => { });
 
-const commentPost = asyncHandler(async (req, res) => { });
 
 const fetchUserPosts = asyncHandler(async (req, res) => { });
 
-const fetchPostComments = asyncHandler(async (req, res) => { });
 
 const fetchPostLikes = asyncHandler(async (req, res) => { });
 
 const fetchPostReplies = asyncHandler(async (req, res) => { });
 
-export { fetchPosts, createPost, updatePost, deletePost, fetchPostById };
+export {
+    fetchPosts, createPost, updatePost, deletePost, fetchPostById,
+    createCommentOnPost, updateComment, deleteComment, fetchPostComments, fetchCommentById,
+    fetchCommentReplies
+};

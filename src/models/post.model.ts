@@ -15,7 +15,7 @@ export interface IPost extends Document {
   comments: Types.ObjectId[];
   linkedNotifications: Types.ObjectId[];
   likeCount: number;
-  bookmarkCount: number;
+  commentCount: number;
   isDeleted: boolean;
   isHidden: boolean;
   deletedAt?: Date | null;
@@ -49,7 +49,7 @@ const postSchema = new Schema<IPost>(
     comments: [{ type: Schema.Types.ObjectId, ref: 'Comment' }],
     linkedNotifications: [{ type: Schema.Types.ObjectId, ref: 'Notification' }],
     likeCount: { type: Number, default: 0 },
-    bookmarkCount: { type: Number, default: 0 },
+    commentCount: { type: Number, default: 0 },
     isDeleted: { type: Boolean, default: false },
     isHidden: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
@@ -66,7 +66,7 @@ const postSchema = new Schema<IPost>(
 //   return this.likes?.length || 0;
 // });
 
-// postSchema.virtual('bookmarkCountVirtual').get(function () {
+// postSchema.virtual('commentCountVirtual').get(function () {
 //   return this.bookmarks?.length || 0;
 // });
 
