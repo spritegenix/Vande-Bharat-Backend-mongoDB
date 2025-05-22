@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { mediaArraySchema } from './media.validators';
+import { POSTS_PAGE_LIMIT } from '@/constants';
 
 const objectIdRegex = /^[0-9a-fA-F]{24}$/;
 const objectIdMessage = 'Must be a valid 24-character MongoDB ObjectId';
@@ -66,5 +67,16 @@ export const commentIdParamSchema = z.object({
       message: 'Invalid Comment ID format. Must be a 24-character hex string.',
     }),
 });
-
 export type CommentIdParamInput = z.infer<typeof commentIdParamSchema>;
+
+export const userPostsQuerySchema = z.object({
+  filter: z
+    .enum(['created', 'liked', 'commented', 'replied'])
+    .optional()
+    .default('created'),
+  limit: z
+    .string()
+    .optional()
+    .transform((val) => (val ? parseInt(val, 10) : POSTS_PAGE_LIMIT)),
+  cursor: z.string().optional(),
+});

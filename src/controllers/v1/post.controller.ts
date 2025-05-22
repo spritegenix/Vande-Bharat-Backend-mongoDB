@@ -6,6 +6,7 @@ import httpStatus from 'http-status';
 import * as postService from '@/services/v1/post.service';
 import mongoose from "mongoose";
 import { createCommentSchema, updateCommentSchema } from "@/validators/v1/comment.validator";
+import { POSTS_PAGE_LIMIT } from "@/constants";
 
 const createPost = asyncHandler(async (req, res) => {
     const { userId } = getAuth(req);
@@ -39,7 +40,7 @@ const updatePost = asyncHandler(async (req, res) => {
         throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
     }
 
-    const postId = req.params.postId;
+    const { postId } = req.params;
     const parsed = updatePostSchema.safeParse(req.body);
     if (!parsed.success) {
         const errors = parsed.error.errors.map((e) => ({
@@ -67,7 +68,7 @@ const deletePost = asyncHandler(async (req, res) => {
     if (!userId) {
         throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
     }
-    const postId = req.params.postId;
+    const { postId } = req.params;
     await postService.deletePost({ postId, userId, });
     res.status(httpStatus.OK).json({
         success: true,
@@ -77,12 +78,12 @@ const deletePost = asyncHandler(async (req, res) => {
 
 const fetchPostById = asyncHandler(async (req, res) => {
     const { userId } = getAuth(req);
-    const { id } = req.params;
+    const { postId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!mongoose.Types.ObjectId.isValid(postId)) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID');
     }
-    const post = await postService.getPostById(id, userId);
+    const post = await postService.getPostById(postId, userId);
 
     if (!post) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Post not found');
@@ -101,7 +102,7 @@ const fetchPosts = asyncHandler(async (req, res) => {
     const result = await postService.getPosts({
         userId: userId || undefined,
         sort: (sort as 'popular' | 'newest') || 'popular',
-        limit: parseInt(limit as string) || 10,
+        limit: parseInt(limit as string) || POSTS_PAGE_LIMIT,
         cursor: cursor as string,
     });
 
@@ -109,6 +110,35 @@ const fetchPosts = asyncHandler(async (req, res) => {
         success: true,
         data: result.posts,
         nextCursor: result.nextCursor,
+        sort: sort || 'created',
+        limit: limit || POSTS_PAGE_LIMIT,
+    });
+});
+
+const fetchUserPosts = asyncHandler(async (req, res) => {
+    const { userId } = getAuth(req);
+    if (!userId) {
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
+    }
+    const { filter, limit, cursor } = req.query as {
+        filter?: 'created' | 'liked' | 'commented' | 'replied';
+        limit?: string;
+        cursor?: string;
+    };
+
+    const result = await postService.getUserPosts({
+        userId,
+        filter: filter || 'created',
+        limit: parseInt(limit as string) || POSTS_PAGE_LIMIT,
+        cursor,
+    });
+
+    res.status(200).json({
+        success: true,
+        data: result.posts,
+        nextCursor: result.nextCursor,
+        filterType: filter || 'created',
+        limit: limit || POSTS_PAGE_LIMIT,
     });
 });
 // ----------------------------------------------------------- //
@@ -213,33 +243,20 @@ const fetchCommentById = asyncHandler(async (req, res) => {
 
 const fetchCommentReplies = asyncHandler(async (req, res) => {
     const { userId } = getAuth(req);
-  const { commentId } = req.params;
-  const { cursor } = req.query;
+    const { commentId } = req.params;
+    const { cursor } = req.query;
 
-  const result = await postService.getRepliesByCommentId(commentId, cursor as string | undefined, userId as string | undefined);
+    const result = await postService.getRepliesByCommentId(commentId, cursor as string | undefined, userId as string | undefined);
 
-  return res.status(httpStatus.OK).json({
-    success: true,
-    data: result.replies,
-    nextCursor: result.nextCursor
-  });
+    return res.status(httpStatus.OK).json({
+        success: true,
+        data: result.replies,
+        nextCursor: result.nextCursor
+    });
 });
 
-
-
-
-const likePost = asyncHandler(async (req, res) => { });
-
-
-const fetchUserPosts = asyncHandler(async (req, res) => { });
-
-
-const fetchPostLikes = asyncHandler(async (req, res) => { });
-
-const fetchPostReplies = asyncHandler(async (req, res) => { });
-
 export {
-    fetchPosts, createPost, updatePost, deletePost, fetchPostById,
+    fetchPosts, fetchUserPosts, createPost, updatePost, deletePost, fetchPostById,
     createCommentOnPost, updateComment, deleteComment, fetchPostComments, fetchCommentById,
     fetchCommentReplies
 };

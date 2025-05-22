@@ -9,6 +9,7 @@ import { createPostInput, UpdatePostInput } from '@/validators/v1/post.validator
 import { CreateCommentInput, UpdateCommentInput } from '@/validators/v1/comment.validator';
 import { CommentModel } from '@/models/comment.model';
 import { COMMENTS_PAGE_LIMIT, REPLIES_PAGE_LIMIT } from '@/constants';
+import { buildPostPipeline } from '@/utils/postPipelineBuilder';
 
 interface GetPostsParams {
   userId?: string;
@@ -110,100 +111,165 @@ export const deletePost = async ({ postId, userId }: { postId: string; userId: s
   return post;
 };
 
-export const getPosts = async ({ userId, limit = 10, cursor }: {
+export const getPosts = async ({
+  userId,
+  sort = 'newest',
+  limit = 10,
+  cursor,
+}: {
   userId?: string;
   sort?: 'popular' | 'newest';
   limit?: number;
-  cursor?: string; // Format: base64 encoded JSON { createdAt, _id }
+  cursor?: string;
 }) => {
   let followedUserIds: string[] = [];
   let followedPageIds: Types.ObjectId[] = [];
 
   if (userId) {
-    const user = await UserModel.findOne({ userId }).select('following pages').lean();
-    followedUserIds = user?.following?.map(id => id.toString()) || [];
+    const user = await UserModel.findOne({ userId })
+      .select('following pages')
+      .lean();
+    followedUserIds = user?.following?.map((id) => id.toString()) || [];
     followedPageIds = user?.pages || [];
   }
 
-  // Handle cursor decoding
   let cursorFilter: any = {};
   if (cursor) {
     const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString());
-    cursorFilter = {
-      $or: [
-        { createdAt: { $lt: new Date(decoded.createdAt) } },
-        {
-          createdAt: new Date(decoded.createdAt),
-          _id: { $lt: new Types.ObjectId(decoded._id) },
-        },
-      ],
-    };
+    cursorFilter =
+      sort === 'popular'
+        ? {
+            $or: [
+              { score: { $lt: decoded.score } },
+              {
+                score: decoded.score,
+                _id: { $lt: new Types.ObjectId(decoded._id) },
+              },
+            ],
+          }
+        : {
+            $or: [
+              { createdAt: { $lt: new Date(decoded.createdAt) } },
+              {
+                createdAt: new Date(decoded.createdAt),
+                _id: { $lt: new Types.ObjectId(decoded._id as string) },
+              },
+            ],
+          };
   }
 
-  // Build base match
   const baseMatch = {
     isDeleted: false,
     ...cursorFilter,
   };
 
-  // Stage 1: Followed users/pages
   const followedMatch = userId
     ? {
-      ...baseMatch,
-      $or: [
-        { userId: { $in: followedUserIds } },
-        { pageId: { $in: followedPageIds } },
-      ],
-    }
+        ...baseMatch,
+        $or: [
+          { userId: { $in: followedUserIds } },
+          { pageId: { $in: followedPageIds } },
+        ],
+      }
     : null;
 
   const followedPosts = userId
-    ? await PostModel.find(followedMatch)
-      .sort({ createdAt: -1, _id: -1 })
-      .limit(limit)
-      .lean()
+    ? await PostModel.aggregate(
+        buildPostPipeline({ match: followedMatch!, sort, limit })
+      )
     : [];
 
   let remainingPosts: any[] = [];
-
-  // If fewer than `limit`, fill from non-followed
   if (userId && followedPosts.length < limit) {
-    const excludeIds = followedPosts.map(p => p._id);
+    const excludeIds = followedPosts.map((p) => p._id);
     const excludeMatch = {
       ...baseMatch,
-      _id: { $nin: excludeIds },
       $nor: [
         { userId: { $in: followedUserIds } },
         { pageId: { $in: followedPageIds } },
       ],
     };
 
-    remainingPosts = await PostModel.find(excludeMatch)
-      .sort({ createdAt: -1, _id: -1 })
-      .limit(limit - followedPosts.length)
-      .populate({
-        path: 'userId',
-        model: 'User',
-        localField: 'userId',
-        foreignField: 'userId',
-        justOne: true,
-        select: 'name avatar slug', // 👈 only fetch these
-      })
-      .lean();
+    remainingPosts = await PostModel.aggregate(
+      buildPostPipeline({ match: excludeMatch, sort, limit: limit - followedPosts.length, excludeIds })
+    );
   }
 
   const publicPosts = !userId
-    ? await PostModel.find(baseMatch)
-      .sort({ createdAt: -1, _id: -1 })
-      .limit(limit)
-      .lean()
+    ? await PostModel.aggregate(
+        buildPostPipeline({ match: baseMatch, sort, limit })
+      )
     : [];
 
   const posts = userId ? [...followedPosts, ...remainingPosts] : publicPosts;
-  const hasNextPage = posts.length === limit;
 
   let nextCursor = null;
+  const hasNextPage = posts.length === limit;
   if (hasNextPage) {
+    const last = posts[posts.length - 1];
+    nextCursor = Buffer.from(
+      JSON.stringify(
+        sort === 'popular'
+          ? { score: last.score, _id: last._id }
+          : { createdAt: last.createdAt, _id: last._id }
+      )
+    ).toString('base64');
+  }
+
+  return {
+    posts,
+    nextCursor,
+  };
+};
+
+export const getUserPosts = async ({
+  userId,
+  filter='created',
+  limit,
+  cursor,
+}: {
+  userId: string;
+  filter: 'created' | 'liked' | 'commented' | 'replied';
+  limit: number;
+  cursor?: string;
+}) => {
+  const baseMatch: any = { isDeleted: false };
+
+  if (cursor) {
+    const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString());
+    baseMatch.$or = [
+      { createdAt: { $lt: new Date(decoded.createdAt) } },
+      {
+        createdAt: new Date(decoded.createdAt),
+        _id: { $lt: new Types.ObjectId(decoded._id as string) },
+      },
+    ];
+  }
+
+  let match: any = { ...baseMatch };
+
+  if (filter === 'created') {
+    match.userId = userId;
+  } else if (filter === 'liked') {
+    match.likes = { $in: [userId] };
+  } else if (filter === 'commented' || filter === 'replied') {
+    const comments = await CommentModel.find({
+      userId,
+      isDeleted: false,
+      ...(filter === 'replied' ? { parentCommentId: { $ne: null } } : {}),
+    }).select('postId').lean();
+
+    const postIds = [...new Set(comments.map((c) => c.postId.toString()))];
+    match._id = { $in: postIds.map((id) => new Types.ObjectId(id)) };
+  }
+
+  const posts = await PostModel.find(match)
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(limit)
+    .lean();
+
+  let nextCursor = null;
+  if (posts.length === limit) {
     const last = posts[posts.length - 1];
     nextCursor = Buffer.from(
       JSON.stringify({

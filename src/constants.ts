@@ -38,7 +38,7 @@ export const ALLOWED_FIELDS = new Set([
 export const DEFAULT_FIELDS = 'name email avatar slug';
 
 // -----------------POSTS------------------------------------//
-export const POSTS_PAGE_LIMIT = 10;
+export const POSTS_PAGE_LIMIT = 5;
 
 //----------------- POST COMMENTS or REPLIES----------------- //
 export const COMMENTS_PAGE_LIMIT = 5;
@@ -127,16 +127,17 @@ export const apis = {
       }
     ],
     PATCH: [
-      '/api/v1/posts/:id',
+      '/api/v1/posts/:postId',
     ],
     DELETE: [
-      '/api/v1/posts/:id',
+      '/api/v1/posts/:postId',
     ],
     GET: [
       '/api/v1/posts/all-posts',
-      '/api/v1/posts/:id',
-    ],
+      '/api/v1/posts/:postId',
+      '/api/v1/posts/all-posts?sort=<popular|newest>&limit=<10>&cursor=<next-postId>',
 
+    ],
   },
   commentsAndReplies: {
     POST: [

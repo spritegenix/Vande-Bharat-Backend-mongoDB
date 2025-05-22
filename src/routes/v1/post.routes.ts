@@ -2,7 +2,7 @@ import { Request, Response, Router } from 'express';
 import * as postController from '@/controllers/v1/post.controller';
 import { requireAuth } from '@clerk/express';
 import { validateRequest } from '@/middlewares/validateRequest';
-import { commentIdParamSchema, createPostSchema, postIdParamSchema, updatePostSchema } from '@/validators/v1/post.validators';
+import { commentIdParamSchema, createPostSchema, postIdParamSchema, updatePostSchema, userPostsQuerySchema } from '@/validators/v1/post.validators';
 import { env } from '@/config/zodSafeEnv';
 import { createCommentSchema, updateCommentSchema } from '@/validators/v1/comment.validator';
 
@@ -10,19 +10,23 @@ const router = Router();
 
 // GET /api/v1/posts/all-posts
 // GET /api/v1/posts/all-posts?cursor=66523ffaa8c9d1e8b9e8f127 <-- next postId
+// GET /api/v1/posts/all-posts?sort=<popular|newest>&limit=<10>&cursor=<next-postId>
 router.get('/all-posts', postController.fetchPosts);
 
-// GET /api/v1/posts/:id
-router.get('/:id', postController.fetchPostById);
+// GET /api/v1/posts/my-posts?filter=<type>&limit=<n>&cursor=<cursor>
+router.get( '/my-posts', requireAuth(), validateRequest(userPostsQuerySchema, 'query'), postController.fetchUserPosts );
+
+// GET /api/v1/posts/:postId
+router.get('/:postId', postController.fetchPostById);
 
 // POST /api/v1/posts/create-post
 router.post('/create-post', requireAuth(), validateRequest(createPostSchema, 'body'), postController.createPost);
 
-// PATCH /api/v1/posts/:id
-router.patch('/:id', requireAuth(), validateRequest(postIdParamSchema, 'params'), validateRequest(updatePostSchema, 'body'), postController.updatePost);
+// PATCH /api/v1/posts/:postId
+router.patch('/:postId', requireAuth(), validateRequest(postIdParamSchema, 'params'), validateRequest(updatePostSchema, 'body'), postController.updatePost);
 
-// DELETE /api/v1/posts/:id
-router.delete('/:id', requireAuth(), validateRequest(postIdParamSchema, 'params'), postController.deletePost);
+// DELETE /api/v1/posts/:postId
+router.delete('/:postId', requireAuth(), validateRequest(postIdParamSchema, 'params'), postController.deletePost);
 
 // ----------------------COMMENTS or REPLIES------------------------- //
 
@@ -45,9 +49,6 @@ router.get('/comments/:commentId', postController.fetchCommentById);
 // GET /api/v1/posts/comments/:commentId/replies
 // GET /api/v1/posts/comments/:commentId/replies?cursor=66523ffaa8c9d1e8b9e8f127
 router.get('/comments/:commentId/replies', postController.fetchCommentReplies);
-
-
-
 
 
 // ------------------------------------------- //
