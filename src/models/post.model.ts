@@ -10,7 +10,6 @@ export interface IPost extends Document {
   pageId?: Types.ObjectId | null;
   communityId?: Types.ObjectId | null;
   attachments?: IMedia[];
-  likes: String[];
   comments: Types.ObjectId[];
   linkedNotifications: Types.ObjectId[];
   likeCount: number;
@@ -43,7 +42,6 @@ const postSchema = new Schema<IPost>(
         message: 'Maximum of 10 attachments allowed.',
       },
     },
-    likes: [{ type: String, ref: 'User' }],
     comments: [{ type: Schema.Types.ObjectId, ref: 'Comment' }],
     linkedNotifications: [{ type: Schema.Types.ObjectId, ref: 'Notification' }],
     likeCount: { type: Number, default: 0 },
