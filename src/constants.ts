@@ -135,8 +135,10 @@ export const apis = {
     GET: [
       '/api/v1/posts/all-posts',
       '/api/v1/posts/:postId',
+      '/api/v1/posts/all-posts?isLiked=true&isBookmarked=true',
       '/api/v1/posts/all-posts?sort=<popular|newest>&limit=<10>&cursor=<next-postId>',
-
+      '/api/v1/posts/my-posts',
+      '/api/v1/posts/my-posts?filter=<created|liked|commented|replied>&limit=<n>&cursor=<cursor>',  
     ],
   },
   commentsAndReplies: {
@@ -164,6 +166,27 @@ export const apis = {
       '/api/v1/posts/comments/:commentId/replies?cursor=66523ffaa8c9d1e8b9e8f127 ',
     ],
   },
+  bookmarks:{
+    GET: [
+      '/api/v1/posts/bookmarks/my-bookmarks',
+      '/api/v1/posts/bookmarks/check/:postId',
+    ],
+    POST: [
+      '/api/v1/posts/bookmarks/toggle',
+      {
+        "postId": "682dbf85b4c780ea704e70be"
+      }
+    ],
+  },
+  likes:
+  {
+    POST: [
+      '/api/v1/posts/:postId/like',
+    ],
+    GET: [
+      '/api/v1/posts/:postId/likes',
+    ],
+  }
 }
 
 export const countries = [

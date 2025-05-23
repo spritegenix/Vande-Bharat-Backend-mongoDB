@@ -10,13 +10,8 @@ import { CreateCommentInput, UpdateCommentInput } from '@/validators/v1/comment.
 import { CommentModel } from '@/models/comment.model';
 import { COMMENTS_PAGE_LIMIT, REPLIES_PAGE_LIMIT } from '@/constants';
 import { buildPostPipeline } from '@/utils/postPipelineBuilder';
-
-interface GetPostsParams {
-  userId?: string;
-  sort?: 'popular' | 'newest';
-  limit?: number;
-  cursor?: string; // Format: base64 encoded JSON { createdAt, _id }
-}
+import { LikeModel } from '@/models/like.model';
+import { BookmarkModel } from '@/models/bookmark.model';
 
 export const createPost = async ({ userId, data }: { userId: string; data: createPostInput; }) => {
   const { content, tags, attachments, pageId, communityId, isHidden } = data;
@@ -116,11 +111,15 @@ export const getPosts = async ({
   sort = 'newest',
   limit = 10,
   cursor,
+  checkLike,
+  checkBookmark
 }: {
   userId?: string;
   sort?: 'popular' | 'newest';
   limit?: number;
   cursor?: string;
+  checkLike?: boolean;
+  checkBookmark?: boolean;
 }) => {
   let followedUserIds: string[] = [];
   let followedPageIds: Types.ObjectId[] = [];
@@ -215,6 +214,46 @@ export const getPosts = async ({
       )
     ).toString('base64');
   }
+  // ------ Check Likes and Bookmarks ------ //
+  if (userId && (checkLike || checkBookmark) && posts.length > 0) {
+  const postIds = posts.map((p) => p._id.toString());
+
+  let likedMap: Record<string, boolean> = {};
+  let bookmarkedMap: Record<string, boolean> = {};
+
+  if (checkLike) {
+    const likes = await LikeModel.find({
+      userId,
+      postId: { $in: postIds },
+      isDeleted: false,
+    }).select('postId');
+
+    likedMap = likes.reduce((acc, like) => {
+      acc[like.postId.toString()] = true;
+      return acc;
+    }, {} as Record<string, boolean>);
+  }
+
+  if (checkBookmark) {
+    const bookmarks = await BookmarkModel.find({
+      userId,
+      postId: { $in: postIds },
+      isDeleted: false,
+    }).select('postId');
+
+    bookmarkedMap = bookmarks.reduce((acc, bm) => {
+      acc[bm.postId.toString()] = true;
+      return acc;
+    }, {} as Record<string, boolean>);
+  }
+
+  // Inject into each post
+  for (const post of posts) {
+    const postIdStr = post._id.toString();
+    post.isLiked = likedMap[postIdStr] || false;
+    post.isBookmarked = bookmarkedMap[postIdStr] || false;
+  }
+}
 
   return {
     posts,
@@ -285,7 +324,7 @@ export const getUserPosts = async ({
   };
 };
 
-export const getPostById = async (postId: string, userId?: string | null) => {
+export const getPostById = async (postId: string, userId?: string | null, checkLike?: boolean, checkBookmark?: boolean) => {
   const post = await PostModel.findById(postId)
     .populate({
       path: 'userId',
@@ -303,13 +342,24 @@ export const getPostById = async (postId: string, userId?: string | null) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'Post not found or deleted already');
   }
 
-  const isLiked = userId ? post.likes?.includes(userId) : false;
-  const isBookmarked = userId ? post.bookmarks?.includes(userId) : false;
+  let isLikedByUser: boolean | undefined = undefined;
+  let isBookmarkedByUser: boolean | undefined = undefined;
+
+  if (userId) {
+    if (checkLike) {
+      isLikedByUser = !!(await LikeModel.findOne({ userId, postId, isDeleted: false }));
+    }
+
+    if (checkBookmark) {
+      isBookmarkedByUser = !!(await BookmarkModel.findOne({ userId, postId, isDeleted: false }));
+    }
+  }
+
 
   return {
-    ...post,
-    isLiked,
-    isBookmarked,
+    post,
+    isBookmarkedByUser,
+    isLikedByUser
   };
 };
 

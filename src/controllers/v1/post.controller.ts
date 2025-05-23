@@ -78,12 +78,16 @@ const deletePost = asyncHandler(async (req, res) => {
 
 const fetchPostById = asyncHandler(async (req, res) => {
     const { userId } = getAuth(req);
+    if (!userId) {
+        throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
+    }
     const { postId } = req.params;
-
     if (!mongoose.Types.ObjectId.isValid(postId)) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID');
     }
-    const post = await postService.getPostById(postId, userId);
+    const {isLiked, isBookmarked} = req.query
+
+    const post = await postService.getPostById(postId, userId, isLiked === 'true', isBookmarked === 'true');
 
     if (!post) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Post not found');
@@ -91,21 +95,27 @@ const fetchPostById = asyncHandler(async (req, res) => {
 
     res.status(200).json({
         success: true,
-        data: post,
+        data: post.post,
+        isLiked: post.isLikedByUser || false,
+        isBookmarked: post.isBookmarkedByUser || false
     });
 });
 
 const fetchPosts = asyncHandler(async (req, res) => {
     const { userId } = getAuth(req);
-    const { sort, limit, cursor } = req.query;
+    const { sort, limit, cursor, isLiked, isBookmarked } = req.query;
 
     const result = await postService.getPosts({
         userId: userId || undefined,
         sort: (sort as 'popular' | 'newest') || 'popular',
         limit: parseInt(limit as string) || POSTS_PAGE_LIMIT,
         cursor: cursor as string,
+        checkBookmark: isBookmarked === 'true',
+        checkLike: isLiked === 'true',
     });
-
+    if(!result) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Posts not found');
+    }
     res.status(200).json({
         success: true,
         data: result.posts,
@@ -141,7 +151,7 @@ const fetchUserPosts = asyncHandler(async (req, res) => {
         limit: limit || POSTS_PAGE_LIMIT,
     });
 });
-// ----------------------------------------------------------- //
+// --------------------------COMMENTS or REPLIES--------------------------------- //
 
 const createCommentOnPost = asyncHandler(async (req, res) => {
     // console.log('req.body', req.body);

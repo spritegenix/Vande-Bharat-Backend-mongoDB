@@ -11,7 +11,6 @@ export interface IPost extends Document {
   communityId?: Types.ObjectId | null;
   attachments?: IMedia[];
   likes: String[];
-  bookmarks: String[];
   comments: Types.ObjectId[];
   linkedNotifications: Types.ObjectId[];
   likeCount: number;
@@ -45,7 +44,6 @@ const postSchema = new Schema<IPost>(
       },
     },
     likes: [{ type: String, ref: 'User' }],
-    bookmarks: [{ type: String, ref: 'User' }],
     comments: [{ type: Schema.Types.ObjectId, ref: 'Comment' }],
     linkedNotifications: [{ type: Schema.Types.ObjectId, ref: 'Notification' }],
     likeCount: { type: Number, default: 0 },
