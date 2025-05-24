@@ -12,6 +12,7 @@ import { COMMENTS_PAGE_LIMIT, REPLIES_PAGE_LIMIT } from '@/constants';
 import { buildPostPipeline } from '@/utils/postPipelineBuilder';
 import { LikeModel } from '@/models/like.model';
 import { BookmarkModel } from '@/models/bookmark.model';
+import { decodeCursor, encodeCursor } from '@/utils/cursor';
 
 export const createPost = async ({ userId, data }: { userId: string; data: createPostInput; }) => {
   const { content, tags, attachments, pageId, communityId, isHidden } = data;
@@ -19,7 +20,7 @@ export const createPost = async ({ userId, data }: { userId: string; data: creat
   // Validate page ownership
   if (pageId) {
     const page = await Page.findOne({ _id: pageId, isDeleted: false }).select('owner');
-    if (!page || !page.owner.equals(userId)) {
+    if (!page || !(page.owner === userId)) {
       throw new ApiError(httpStatus.FORBIDDEN, 'You are not the owner of this page');
     }
   }
@@ -29,9 +30,9 @@ export const createPost = async ({ userId, data }: { userId: string; data: creat
     const community = await Community.findOne({ _id: communityId, isDeleted: false }).select('owner members admins');
 
     const isAuthorized =
-      community?.owner?.equals(userId) ||
-      community?.members?.some((m) => m.equals(userId)) ||
-      community?.admins?.some((a) => a.equals(userId));
+      community?.owner === userId ||
+      community?.members?.some((m) => m === userId) ||
+      community?.admins?.some((a) => a === userId);
 
     if (!community || !isAuthorized) {
       throw new ApiError(
@@ -134,27 +135,29 @@ export const getPosts = async ({
 
   let cursorFilter: any = {};
   if (cursor) {
-    const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString());
+    // const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString());
+    const decoded = decodeCursor(cursor);
+    if (!decoded) return { posts: [], nextCursor: null };
     cursorFilter =
       sort === 'popular'
         ? {
-            $or: [
-              { score: { $lt: decoded.score } },
-              {
-                score: decoded.score,
-                _id: { $lt: new Types.ObjectId(decoded._id) },
-              },
-            ],
-          }
+          $or: [
+            { score: { $lt: decoded.score } },
+            {
+              score: decoded.score,
+              _id: { $lt: new Types.ObjectId(decoded._id) },
+            },
+          ],
+        }
         : {
-            $or: [
-              { createdAt: { $lt: new Date(decoded.createdAt) } },
-              {
-                createdAt: new Date(decoded.createdAt),
-                _id: { $lt: new Types.ObjectId(decoded._id as string) },
-              },
-            ],
-          };
+          $or: [
+            { createdAt: { $lt: new Date(decoded.createdAt) } },
+            {
+              createdAt: new Date(decoded.createdAt),
+              _id: { $lt: new Types.ObjectId(decoded._id) },
+            },
+          ],
+        };
   }
 
   const baseMatch = {
@@ -164,18 +167,18 @@ export const getPosts = async ({
 
   const followedMatch = userId
     ? {
-        ...baseMatch,
-        $or: [
-          { userId: { $in: followedUserIds } },
-          { pageId: { $in: followedPageIds } },
-        ],
-      }
+      ...baseMatch,
+      $or: [
+        { userId: { $in: followedUserIds } },
+        { pageId: { $in: followedPageIds } },
+      ],
+    }
     : null;
 
   const followedPosts = userId
     ? await PostModel.aggregate(
-        buildPostPipeline({ match: followedMatch!, sort, limit })
-      )
+      buildPostPipeline({ match: followedMatch!, sort, limit })
+    )
     : [];
 
   let remainingPosts: any[] = [];
@@ -196,8 +199,8 @@ export const getPosts = async ({
 
   const publicPosts = !userId
     ? await PostModel.aggregate(
-        buildPostPipeline({ match: baseMatch, sort, limit })
-      )
+      buildPostPipeline({ match: baseMatch, sort, limit })
+    )
     : [];
 
   const posts = userId ? [...followedPosts, ...remainingPosts] : publicPosts;
@@ -206,54 +209,53 @@ export const getPosts = async ({
   const hasNextPage = posts.length === limit;
   if (hasNextPage) {
     const last = posts[posts.length - 1];
-    nextCursor = Buffer.from(
-      JSON.stringify(
-        sort === 'popular'
-          ? { score: last.score, _id: last._id }
-          : { createdAt: last.createdAt, _id: last._id }
-      )
-    ).toString('base64');
+
+    nextCursor = encodeCursor({
+      _id: last._id,
+      createdAt: new Date(last.createdAt),
+      ...(sort === 'popular' && { score: last.score }),
+    });
   }
   // ------ Check Likes and Bookmarks ------ //
   if (userId && (checkLike || checkBookmark) && posts.length > 0) {
-  const postIds = posts.map((p) => p._id.toString());
+    const postIds = posts.map((p) => p._id.toString());
 
-  let likedMap: Record<string, boolean> = {};
-  let bookmarkedMap: Record<string, boolean> = {};
+    let likedMap: Record<string, boolean> = {};
+    let bookmarkedMap: Record<string, boolean> = {};
 
-  if (checkLike) {
-    const likes = await LikeModel.find({
-      userId,
-      postId: { $in: postIds },
-      isDeleted: false,
-    }).select('postId');
+    if (checkLike) {
+      const likes = await LikeModel.find({
+        userId,
+        postId: { $in: postIds },
+        isDeleted: false,
+      }).select('postId');
 
-    likedMap = likes.reduce((acc, like) => {
-      acc[like.postId.toString()] = true;
-      return acc;
-    }, {} as Record<string, boolean>);
+      likedMap = likes.reduce((acc, like) => {
+        acc[like.postId.toString()] = true;
+        return acc;
+      }, {} as Record<string, boolean>);
+    }
+
+    if (checkBookmark) {
+      const bookmarks = await BookmarkModel.find({
+        userId,
+        postId: { $in: postIds },
+        isDeleted: false,
+      }).select('postId');
+
+      bookmarkedMap = bookmarks.reduce((acc, bm) => {
+        acc[bm.postId.toString()] = true;
+        return acc;
+      }, {} as Record<string, boolean>);
+    }
+
+    // Inject into each post
+    for (const post of posts) {
+      const postIdStr = post._id.toString();
+      post.isLiked = likedMap[postIdStr] || false;
+      post.isBookmarked = bookmarkedMap[postIdStr] || false;
+    }
   }
-
-  if (checkBookmark) {
-    const bookmarks = await BookmarkModel.find({
-      userId,
-      postId: { $in: postIds },
-      isDeleted: false,
-    }).select('postId');
-
-    bookmarkedMap = bookmarks.reduce((acc, bm) => {
-      acc[bm.postId.toString()] = true;
-      return acc;
-    }, {} as Record<string, boolean>);
-  }
-
-  // Inject into each post
-  for (const post of posts) {
-    const postIdStr = post._id.toString();
-    post.isLiked = likedMap[postIdStr] || false;
-    post.isBookmarked = bookmarkedMap[postIdStr] || false;
-  }
-}
 
   return {
     posts,
@@ -263,7 +265,7 @@ export const getPosts = async ({
 
 export const getUserPosts = async ({
   userId,
-  filter='created',
+  filter = 'created',
   limit,
   cursor,
 }: {

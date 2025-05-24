@@ -13,9 +13,9 @@ export interface IPage extends Document {
   isVerified: boolean;
   isHidden: boolean;
 
-  owner: Types.ObjectId;
-  moderators: Types.ObjectId[];
-  followers: Types.ObjectId[];
+  owner: string;
+  admins: string[];
+  followers: string[];
 
   posts: Types.ObjectId[];
   categories: Types.ObjectId[];
@@ -38,9 +38,9 @@ const pageSchema = new Schema<IPage>(
     isVerified: { type: Boolean, default: false },
     isHidden: { type: Boolean, default: false },
 
-    owner: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    moderators: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-    followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    owner: { type: String, ref: 'User', required: true },
+    admins: [{ type: String, ref: 'User' }],
+    followers: [{ type: String, ref: 'User' }],
 
     posts: [{ type: Schema.Types.ObjectId, ref: 'Post' }],
     categories: [{ type: Schema.Types.ObjectId, ref: 'Category' }],

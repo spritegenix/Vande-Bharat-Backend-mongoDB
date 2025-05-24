@@ -1,4 +1,5 @@
 import { customAlphabet } from 'nanoid';
+import { Model } from 'mongoose';
 import { UserModel } from '@/models/user.model';
 
 const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 5);
@@ -8,7 +9,7 @@ const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 5);
  * @param fullName Full name of the user (e.g., "John Doe")
  * @returns Unique slug (e.g., "john-doe", "john-doe-x4k3z")
  */
-export async function generateSlug(text: string): Promise<string> {
+export async function generateSlug( text: string, model: Model<any> = UserModel ): Promise<string> {
   const baseSlug = text
     .toLowerCase()
     .trim()
@@ -19,11 +20,21 @@ export async function generateSlug(text: string): Promise<string> {
   let attempt = 0;
 
   // Try max 5 attempts with unique nanoid
-  while (await UserModel.exists({ slug })) {
+ while (await model.exists({ slug })) {
     attempt++;
-    slug = `${baseSlug}-${nanoid()}`;
+    slug = `${baseSlug}-${nanoid(6)}`; // short id for readability
     if (attempt >= 5) break;
   }
 
   return slug;
 }
+/*
+// Default: UserModel
+const slug1 = await generateSlug('Jane Doe');
+
+// Custom model: Community
+const slug2 = await generateSlug('Dev Talk', Community);
+
+// Custom model: Page
+const slug3 = await generateSlug('Marketing Hub', PageModel);
+ */

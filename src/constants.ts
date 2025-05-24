@@ -44,7 +44,25 @@ export const POSTS_PAGE_LIMIT = 5;
 export const COMMENTS_PAGE_LIMIT = 5;
 export const REPLIES_PAGE_LIMIT = 5;
 
+//----------------- COMMUNITIES---------------------------- //
+export const COMMUNITY_DEFAULT_FIELDS = ['name', 'slug', 'avatar'];
 
+export const COMMUNITY_ALLOWED_FIELDS = [
+  'name',
+  'slug',
+  'avatar',
+  'banner',
+  'description',
+  'tags',
+  'owner',
+  'admins',
+  'posts',
+  'isVerified',
+  'isPrivate',
+  'followingCount',
+  'createdAt',
+  'updatedAt',
+];
 
 
 
@@ -138,7 +156,7 @@ export const apis = {
       '/api/v1/posts/all-posts?isLiked=true&isBookmarked=true',
       '/api/v1/posts/all-posts?sort=<popular|newest>&limit=<10>&cursor=<next-postId>',
       '/api/v1/posts/my-posts',
-      '/api/v1/posts/my-posts?filter=<created|liked|commented|replied>&limit=<n>&cursor=<cursor>',  
+      '/api/v1/posts/my-posts?filter=<created|liked|commented|replied>&limit=<n>&cursor=<cursor>',
     ],
   },
   commentsAndReplies: {
@@ -166,7 +184,7 @@ export const apis = {
       '/api/v1/posts/comments/:commentId/replies?cursor=66523ffaa8c9d1e8b9e8f127 ',
     ],
   },
-  bookmarks:{
+  bookmarks: {
     GET: [
       '/api/v1/posts/bookmarks/my-bookmarks',
       '/api/v1/posts/bookmarks/check/:postId',
@@ -185,6 +203,51 @@ export const apis = {
     ],
     GET: [
       '/api/v1/posts/:postId/likes',
+    ],
+  },
+  community: {
+    POST: [
+      "/api/v1/communities/create-community",
+      {
+        "name": "Tech Enthusiasts",
+        "description": "A community for people who love technology and innovation.",
+        "isPrivate": false,
+        "coverImage": "https://your-s3-bucket.s3.amazonaws.com/community-covers/tech.jpg",
+        "avatar": "https://your-s3-bucket.s3.amazonaws.com/community-avatars/tech-avatar.jpg",
+        "tags": ["technology", "innovation", "gadgets"]
+      }
+    ],
+    PATCH: [
+      "/api/v1/communities/:communitySlug",
+      "/api/v1/communities/:slug/toggle-member-promotion",
+      { adminSlug: "user_xyz" }
+    ],
+    GET: [
+      "/api/v1/communities/:communitySlug?fields=description,banner,followingCount",
+      "/api/v1/communities/:slug/members?limit=10&cursor=user_abcd"
+    ],
+    DELETE: [
+      "/api/v1/communities/:communityId",
+      "/api/v1/communities/:slug/leave"
+    ]
+  },
+  request: {
+    POST: [
+      "/api/v1/requests/join-community/:slug",
+      "/api/v1/requests/invite/:slug",
+      {
+        "targetUserSlug": "spritegenix-tools-pankaj"
+      }
+    ],
+    GET: [
+      "/api/v1/requests/join-community/:slug/requests",
+    ],
+    PATCH: [
+      "/api/v1/requests/join-community/:slug/respond",
+    ],
+    DELETE: [
+      "/api/v1/requests/join-community/remove/:slug",
+      "/api/v1/requests/join-community/:slug/cancel"
     ],
   }
 }

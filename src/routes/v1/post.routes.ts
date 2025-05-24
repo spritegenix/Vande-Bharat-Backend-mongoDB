@@ -21,6 +21,8 @@ router.get('/all-posts', postController.fetchPosts);
 // GET /api/v1/posts/my-posts?filter=<created|liked|commented|replied>&limit=<n>&cursor=<cursor>
 router.get('/my-posts', requireAuth(), validateRequest(userPostsQuerySchema, 'query'), postController.fetchUserPosts);
 
+
+
 // GET /api/v1/posts/:postId
 // GET /api/v1/posts/:postId?isLiked=true&isBookmarked=true
 router.get('/:postId', postController.fetchPostById);

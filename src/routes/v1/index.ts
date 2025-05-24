@@ -4,6 +4,8 @@ import userRoutes from "./user.routes";
 import authRoutes from "./auth.routes";
 import postRoutes from "./post.routes";
 import mediaRoutes from "./media.routes";
+import communityRoutes from "./community.routes";
+import requestRoutes from "./request.routes";
 
 const router = Router();
 // Clerk Web Hook
@@ -18,8 +20,19 @@ router.use("/users", userRoutes);
 // Post
 router.use("/posts", postRoutes);
 
+// Community
+router.use('/communities', communityRoutes);
+
+// Request
+router.use('/requests', requestRoutes);
+
+
+
+
+
+
 router.get("/health", (_req: Request, res: Response) => {
-    res.status(200).json({ status: "OK", environment: env.NODE_ENV,  });
+    res.status(200).json({ status: "OK", environment: env.NODE_ENV, });
 });
 
 export default router;

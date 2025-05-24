@@ -10,17 +10,18 @@ export interface ICommunity extends Document {
   avatar?: string;
   banner?: string;
 
-  owner: Types.ObjectId; // User who created the community
-  members: Types.ObjectId[]; // Joined users
-  admins: Types.ObjectId[]; // Moderators or extra admins
+  owner: string; // Clerk userId (string)
+  members: string[]; // Clerk userIds
+  admins: string[]; // Clerk userIds
 
   posts: Types.ObjectId[];
+  followingCount: number;
 
   isVerified: boolean;
   isPrivate: boolean;
 
   isDeleted?: boolean;
-  deletedAt?: Date;
+  deletedAt?: Date | null;
 
   createdAt: Date;
   updatedAt: Date;
@@ -30,16 +31,18 @@ const communitySchema = new Schema<ICommunity>(
   {
     name: { type: String, required: true, trim: true, maxlength: 100 },
     slug: { type: String, required: true, unique: true },
-    description: { type: String, maxlength: 1000 },
+    description: { type: String, maxlength: 1000, default: null },
     tags: [{ type: String }],
-    avatar: { type: String },
-    banner: { type: String },
+    avatar: { type: String, default: null },
+    banner: { type: String, default: null },
 
-    owner: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    members: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-    admins: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    // Clerk userId references (strings, not ObjectId)
+    owner: { type: String, ref: 'User', required: true },
+    members: [{ type: String, ref: 'User' }],
+    admins: [{ type: String, ref: 'User' }],
 
     posts: [{ type: Schema.Types.ObjectId, ref: 'Post' }],
+    followingCount: { type: Number, default: 0 },
 
     isVerified: { type: Boolean, default: false },
     isPrivate: { type: Boolean, default: false },
@@ -52,13 +55,10 @@ const communitySchema = new Schema<ICommunity>(
   }
 );
 
-communitySchema.pre('validate', async function (next) {
-  if (!this.slug && this.name) {
-    this.slug = await generateSlug(this.name);
-  }
-  next();
-});
+// Index for query performance on owner
+communitySchema.index({ owner: 1 });
 
+// Apply audit plugin (createdBy, updatedBy, etc.)
 communitySchema.plugin(auditPlugin, { modelName: 'Community' });
 
 export const Community = model<ICommunity>('Community', communitySchema);

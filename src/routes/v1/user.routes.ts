@@ -8,12 +8,11 @@ const router = Router();
 
 
 // GET /api/v1/users/me
+// GET /api/v1/users/me?fields=<field1,field2,field3>
 router.get('/me', requireAuth(), userController.getMyProfile);
 
 // PATCH /api/v1/users/me
 router.patch('/me', requireAuth(), validateRequest(updateUserSchema, 'body'), userController.updateUser);
-
-
 
 // GET /api/v1/users/health
 router.get("/health", (_req: Request, res: Response) => {

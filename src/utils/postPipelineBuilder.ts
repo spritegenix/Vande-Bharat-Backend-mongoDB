@@ -99,9 +99,15 @@ export const buildPostPipeline = ({
       bookmarkCount: 1,
       createdAt: 1,
       score: 1,
-      userId: { name: 1, avatar: 1, slug: 1 },
-      pageId: { name: 1, avatar: 1, slug: 1 },
-      communityId: { name: 1, avatar: 1, slug: 1 },
+      'userId.name': 1,
+      'userId.avatar': 1,
+      'userId.slug': 1,
+      'pageId.name': 1,
+      'pageId.avatar': 1,
+      'pageId.slug': 1,
+      'communityId.name': 1,
+      'communityId.avatar': 1,
+      'communityId.slug': 1,
     },
   });
 
