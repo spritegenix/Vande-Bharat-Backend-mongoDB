@@ -13,8 +13,11 @@ export const mediaSchema = z
         /^https:\/\/[a-zA-Z0-9.-]+\/[\w\-./%]+$/i,
         'Invalid media URL format'
       ),
-    type: z.enum(['IMAGE', 'VIDEO']),
-    fileName: z.string().min(1),
+    type: z.enum(['IMAGE', 'VIDEO'], {
+      required_error: 'Media type is required',
+      invalid_type_error: 'Invalid media type',
+    }),
+    fileName: z.string().min(1).nonempty('File name cannot be empty'),
     mimeType: z
       .string()
       .regex(/^(image|video)\/[a-zA-Z0-9.+-]+$/, 'Invalid MIME type'),
@@ -65,15 +68,12 @@ export const mediaSchema = z
         message: 'Duration is required for video type',
       });
     }
-  });
+  })
+  .optional();
 
 export const mediaArraySchema = z
   .array(mediaSchema)
-  .max(10, 'Maximum of 10 attachments allowed');
-
-export type MediaSchema = z.infer<typeof mediaSchema>;
-
-// Schema for S3 upload
+  .max(10, 'Maximum of 10 attachments allowed').optional();
 export const s3UploadValidator = z.object({
   fileName: z.string().min(1, 'File name is required'),
   fileType: z.string().regex(/^(image|video)\/[a-zA-Z0-9.+-]+$/, 'Invalid MIME type'),

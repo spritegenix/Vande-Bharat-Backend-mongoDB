@@ -1,4 +1,5 @@
-import { Schema, Types } from 'mongoose';
+import { Schema, model, Document, Types } from 'mongoose';
+import { auditPlugin } from '@/plugins/audit.plugin';
 
 export interface IMedia {
   _id?: Types.ObjectId;
@@ -19,16 +20,11 @@ export const mediaSchema = new Schema<IMedia>(
       type: String,
       required: true,
       validate: {
-        validator: (v: string) =>
-          /^https:\/\/[^\s]+$/.test(v), // Matches valid https URLs without enforcing extensions
+        validator: (v: string) => /^https:\/\/[^\s]+$/.test(v),
         message: 'Invalid media URL format.',
       },
     },
-    type: {
-      type: String,
-      required: true,
-      enum: ['IMAGE', 'VIDEO'],
-    },
+    type: { type: String, enum: ['IMAGE', 'VIDEO'], required: true },
     fileName: { type: String, required: true },
     mimeType: {
       type: String,
@@ -43,40 +39,17 @@ export const mediaSchema = new Schema<IMedia>(
       required: true,
       validate: {
         validator: function (this: IMedia, size: number) {
-          if (this.type === 'IMAGE') {
-            return size <= 5 * 1024 * 1024; // 5 MB
-          } else if (this.type === 'VIDEO') {
-            return size <= 100 * 1024 * 1024; // 100 MB
-          }
+          if (this.type === 'IMAGE') return size <= 5 * 1024 * 1024;
+          if (this.type === 'VIDEO') return size <= 100 * 1024 * 1024;
           return false;
         },
-        message: function (props: any) {
-          return `File size exceeds allowed limit for ${props?.value?.type || 'media'}.`;
-        },
+        message: () => `File size exceeds allowed limit.`,
       },
     },
-    width: {
-      type: Number,
-      required: function () {
-        return this.type === 'IMAGE';
-      },
-    },
-    height: {
-      type: Number,
-      required: function () {
-        return this.type === 'IMAGE';
-      },
-    },
-    duration: {
-      type: Number,
-      required: function () {
-        return this.type === 'VIDEO';
-      },
-    },
-    uploadedAt: {
-      type: Date,
-      default: Date.now,
-    },
+    width: { type: Number, required: function () { return this.type === 'IMAGE'; } },
+    height: { type: Number, required: function () { return this.type === 'IMAGE'; } },
+    duration: { type: Number, required: function () { return this.type === 'VIDEO'; } },
+    uploadedAt: { type: Date, default: Date.now },
   },
-  { _id: false } // embedded schema
+  { _id: false } // embedded
 );

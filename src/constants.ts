@@ -249,6 +249,58 @@ export const apis = {
       "/api/v1/requests/join-community/remove/:slug",
       "/api/v1/requests/join-community/:slug/cancel"
     ],
+  },
+  page: {
+    POST: [
+      "/api/v1/pages/create-page",
+      {
+        "name": "Tech Enthusiasts",
+        "description": "A community for people who love technology and innovation.",
+        "isHidden": false,
+        "banner": "https://your-s3-bucket.s3.amazonaws.com/community-covers/tech.jpg",
+        "avatar": "https://your-s3-bucket.s3.amazonaws.com/community-avatars/tech-avatar.jpg",
+        "tags": ["technology", "innovation", "gadgets"]
+      },
+      "/api/v1/pages/:slug/categories/create-category",
+      "/api/v1/pages/:slug/follow",
+      {
+        "name": "Electronics",
+        "description": "All types of electronic gadgets and accessories",
+        "type": "PRODUCTS"
+      }
+    ],
+    PATCH: [
+      "/api/v1/pages/update-page/:slug",
+      "/api/v1/pages/:slug/categories/:categoryId",
+      {
+        "name": "Electronics update",
+        "description": "All types of electronic gadgets and accessories",
+        "type": "PRODUCTS",
+        "isPublished": true
+      },
+      "/api/v1/pages/:slug/categories/order/reorder",
+      [
+        {
+          "categoryId": "665123abc1a2b3c4d5e6f001",
+          "order": 2
+        },
+        {
+          "categoryId": "665123abc1a2b3c4d5e6f002",
+          "order": 0
+        },
+        {
+          "categoryId": "665123abc1a2b3c4d5e6f003",
+          "order": 1
+        }
+      ],
+    ],
+    GET: [
+      "/api/v1/pages/:slug/followers?limit=10&cursor=user_abcd",
+      "/api/v1/pages/:slug/categories/all"
+    ],
+    DELETE:[
+      "/api/v1/pages/:slug/categories/:categoryId",
+    ]
   }
 }
 

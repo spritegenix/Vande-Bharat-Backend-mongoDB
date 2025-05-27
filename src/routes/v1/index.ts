@@ -6,6 +6,8 @@ import postRoutes from "./post.routes";
 import mediaRoutes from "./media.routes";
 import communityRoutes from "./community.routes";
 import requestRoutes from "./request.routes";
+import pageRoutes from './page.routes';
+
 
 const router = Router();
 // Clerk Web Hook
@@ -22,6 +24,9 @@ router.use("/posts", postRoutes);
 
 // Community
 router.use('/communities', communityRoutes);
+
+// Page
+router.use('/pages', pageRoutes);
 
 // Request
 router.use('/requests', requestRoutes);

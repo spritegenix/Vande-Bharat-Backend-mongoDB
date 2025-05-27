@@ -2,43 +2,49 @@ import { z } from 'zod';
 import { mediaArraySchema } from './media.validators';
 
 export const createPageSchema = z.object({
-  name: z.string().min(1, 'Page name is required'),
-  slug: z.string().min(1, 'Slug is required'),
+  name: z.string().min(2).max(100),
   description: z.string().optional(),
-  avatar: z.string().url('Avatar must be a valid URL').optional(),
-  banner: z.string().url('Banner must be a valid URL').optional(),
-  isVerified: z.boolean().optional(),
+  tags: z.array(z.string().min(1).max(30)).optional(),
+  avatar: z.string().url().optional(),
+  banner: z.string().url().optional(),
   isHidden: z.boolean().optional(),
-  owner: z.string().min(1, 'Owner ID is required'),
-  moderators: z.array(z.string()).optional(),
-  followers: z.array(z.string()).optional(),
-  posts: z.array(z.string()).optional(),
-  categories: z.array(z.string()).optional(),
 });
+
+export type CreatePageInput = z.infer<typeof createPageSchema>;
 
 export const updatePageSchema = createPageSchema.partial();
 
-export type CreatePageInput = z.infer<typeof createPageSchema>;
 export type UpdatePageInput = z.infer<typeof updatePageSchema>;
 
-// ------------------------------------------------------------------ //
+// ---------------------------CATEGORY--------------------------------------- //
 
 export const createCategorySchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(2).max(100),
   description: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-  type: z.enum(['PRODUCTS', 'IMAGES']),
-  pageId: z.string().min(1),
-  attachments: mediaArraySchema.optional(),
-  order: z.number().int().nonnegative().optional(),
+  type: z.enum(['PRODUCTS', 'MEDIA']),
 });
 
-export const updateCategorySchema = createCategorySchema.partial();
-
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
+
+export const updateCategorySchema = createCategorySchema.extend({
+  isPublished: z.boolean().optional(),
+});
+
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
 
-// ---------------------------------------------------------------------- //
+export const reorderCategoriesSchema = z.object({
+  categories: z.array(
+    z.object({
+      categoryId: z.string().min(1),
+      order: z.number().int().min(0),
+    })
+  )
+});
+
+export type ReorderCategoriesInput = z.infer<typeof reorderCategoriesSchema>;
+
+
+// ----------------------------PRODUCT------------------------------------------ //
 
 export const createProductSchema = z.object({
   title: z.string().min(1),
