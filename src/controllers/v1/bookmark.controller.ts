@@ -27,18 +27,28 @@ export const toggleBookmark: RequestHandler = asyncHandler(async (req, res) => {
 });
 
 export const getBookmarks: RequestHandler = asyncHandler(async (req, res) => {
-    const { userId } = getAuth(req);
-    if (!userId) {
-        throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
-    }
-    const { limit, cursor } = req.query;
-    const result = await bookmarkService.getUserBookmarks(userId, parseInt(limit as string) || POSTS_PAGE_LIMIT, cursor as string);
-    res.status(200).json({
-        success: true,
-        bookmarks: result.bookmarks,
-        nextCursor: result.nextCursor
-    });
+  const { userId } = getAuth(req);
+  if (!userId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
+  }
+
+  const { limit, cursor, isLiked, isBookmarked } = req.query;
+
+  const result = await bookmarkService.getUserBookmarks(
+    userId,
+    parseInt(limit as string) || POSTS_PAGE_LIMIT,
+    cursor as string,
+    isLiked === 'true',
+    isBookmarked === 'true'
+  );
+
+  res.status(200).json({
+    success: true,
+    bookmarks: result.bookmarks,
+    nextCursor: result.nextCursor,
+  });
 });
+
 
 
 export const checkBookmark: RequestHandler = asyncHandler(async (req, res) => {
