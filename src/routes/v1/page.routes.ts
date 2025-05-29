@@ -2,8 +2,8 @@ import { Request, Response, Router } from 'express';
 import { requireAuth } from '@clerk/express';
 import { validateRequest } from '@/middlewares/validateRequest';
 import { env } from '@/config/zodSafeEnv';
-import { createCategoryHandler, createPageHandler, deleteCategoryHandler, fetchPageFollowers, getCategoriesByPage, reorderCategoriesHandler, toggleFollowPageHandler, updateCategoryHandler, updatePageHandler } from '@/controllers/v1/page.controller';
-import { createCategorySchema, createPageSchema, reorderCategoriesSchema, updateCategorySchema, updatePageSchema } from '@/validators/v1/page.validators';
+import { addMediaToCategoryHandler, createCategoryHandler, createPageHandler, createProductHandler, deleteCategoryHandler, deleteProductHandler, fetchPageFollowers, getCategoriesByPage, getProductByIdHandler, getProductsHandler, removeMediaFromCategoryHandler, reorderCategoriesHandler, toggleFollowPageHandler, updateCategoryHandler, updatePageHandler, updateProductHandler } from '@/controllers/v1/page.controller';
+import { createCategorySchema, createPageSchema, createProductSchema, reorderCategoriesSchema, updateCategorySchema, updatePageSchema, updateProductSchema } from '@/validators/v1/page.validators';
 
 const router = Router();
 
@@ -30,12 +30,61 @@ router.patch('/:slug/categories/:categoryId', requireAuth(), validateRequest(upd
 router.delete('/:slug/categories/:categoryId', requireAuth(), deleteCategoryHandler);
 
 //  PATCH /api/v1/pages/:slug/categories/order/reorder
-router.patch( '/:slug/categories/order/reorder', requireAuth(),validateRequest(reorderCategoriesSchema, 'body'), reorderCategoriesHandler );
+router.patch('/:slug/categories/order/reorder', requireAuth(), validateRequest(reorderCategoriesSchema, 'body'), reorderCategoriesHandler);
 
 // GET /api/v1/pages/:slug/categories/all
 router.get('/:slug/categories/all', getCategoriesByPage);
 
-// ------------------ CATEGORY ------------------ //
+// ------------------ PRODUCT ------------------ //
+
+// POST /api/v1/pages/:slug/products/create-product
+router.post('/:slug/products/create-product', requireAuth(), validateRequest(createProductSchema, 'body'), createProductHandler);
+
+// PATCH /api/v1/pages/products/:productId
+router.patch('/products/:productId', requireAuth(), validateRequest(updateProductSchema, 'body'), updateProductHandler);
+
+// DELETE /api/v1/pages/:slug/products/:productId
+router.delete('/:slug/products/:productId', requireAuth(), deleteProductHandler);
+
+// GET /api/v1/pages/:slug/products
+// GET /api/v1/pages/:slug/products?fields=price,currency,isInOffer
+// GET /api/v1/pages/:slug/products?search=wireless+earbuds // frontend = replace space with +
+// GET /api/v1/pages/:slug/products?cursor=<next_product_id>&limit=5
+router.get('/:slug/products/all-with-search', getProductsHandler);
+
+// GET /api/v1/pages/products/:productId
+router.get('/products/:productId', getProductByIdHandler);
+
+// ------------------ CATEGORY ROUTES WITH PRODUCT / MEDIA ------------------------ //
+// PATCH /api/v1/pages/:slug/categories/:categoryId/media/add-media
+/*
+{
+  "media": [
+    {
+      "url": "https://s3.amazonaws.com/your-bucket/image1.jpg",
+      "type": "IMAGE",
+      "fileName": "image1.jpg",
+      "mimeType": "image/jpeg",
+      "size": 102400,
+      "width": 800,
+      "height": 600
+    }
+  ]
+}
+*/
+router.patch( '/:slug/categories/:categoryId/media/add-media', requireAuth(), addMediaToCategoryHandler );
+
+// PATCH /api/v1/pages/:slug/categories/:categoryId/media/remove-media
+/*
+{
+  "mediaUrl": "https://s3.amazonaws.com/your-bucket/image1.jpg"
+}
+*/
+router.patch( '/:slug/categories/:categoryId/media/remove-media', requireAuth(), removeMediaFromCategoryHandler );
+
+
+
+
 
 
 
@@ -50,6 +99,7 @@ export default router;
 /*
 page id: 6834955711b6bef7729cf27c - tech-enthusiasts
 category id : 683497db8860b4f860be6da7
+product id : 6835f85eb88357a2566d6ae0
 
 */
 

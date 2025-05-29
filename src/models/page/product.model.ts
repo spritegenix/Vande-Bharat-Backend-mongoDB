@@ -14,8 +14,11 @@ export interface IProduct extends Document {
     attachments: IMedia[];
     pageId: Types.ObjectId;
     categoryId: Types.ObjectId;
-    order: number;
     isPublished: boolean;
+    isDeleted: boolean;
+    deletedAt?: Date | null;
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 
 const productSchema = new Schema<IProduct>(
@@ -38,12 +41,19 @@ const productSchema = new Schema<IProduct>(
             },
         },
         pageId: { type: Schema.Types.ObjectId, ref: 'Page', required: true },
-        order: { type: Number, default: 0 },
         isPublished: { type: Boolean, default: true },
+        isDeleted: { type: Boolean, default: false },
+        deletedAt: { type: Date, default: null },
     },
     { timestamps: true }
 );
-productSchema.index({ title: 'text', tags: 1, pageId: 1 }); // ✅ // for search
+productSchema.virtual('tagsText').get(function (this: IProduct) {
+    return this.tags?.join(' ') ?? '';
+});
+productSchema.index({ title: 'text', tagsText: 'text' });
+
+productSchema.index({ pageId: 1 });
+
 
 productSchema.plugin(auditPlugin, { modelName: 'Product' });
 export const Product = model<IProduct>('Product', productSchema);

@@ -4,8 +4,12 @@ import { Page } from '@/models/page/page.model';
 import { UserModel } from '@/models/user.model';
 import { ApiError } from '@/utils/ApiError';
 import { generateSlug } from '@/utils/generateSlug';
-import { CreateCategoryInput, CreatePageInput, ReorderCategoriesInput, UpdateCategoryInput, UpdatePageInput } from '@/validators/v1/page.validators';
+import { CreateCategoryInput, CreatePageInput, CreateProductInput, ReorderCategoriesInput, UpdateCategoryInput, UpdatePageInput, UpdateProductInput } from '@/validators/v1/page.validators';
 import httpStatus from 'http-status';
+import { Product } from '@/models/page/product.model';
+import { decodeCursor, encodeCursor } from '@/utils/cursor';
+import { buildSearchQuery } from '@/utils/buildSearchQuery';
+import { IMedia } from '@/models/media.model';
 
 export const createPage = async (userId: string, data: CreatePageInput) => {
   const { name, description, tags, avatar, banner, isHidden } = data;
@@ -184,7 +188,7 @@ export const reorderCategories = async (
 ) => {
   const page = await Page.findById(pageId);
   if (!page) throw new ApiError(httpStatus.NOT_FOUND, 'Page not found');
-// console.log(newOrders);
+  // console.log(newOrders);
   const idToOrderMap = new Map(newOrders.categories.map(({ categoryId, order }) => [categoryId, order]));
 
   for (const cat of page.categories) {
@@ -203,3 +207,225 @@ export const reorderCategories = async (
   }));
 };
 
+// ------------------ PRODUCT SERVICES ------------------------ //
+
+export const createProduct = async (
+  pageId: Types.ObjectId,
+  data: CreateProductInput
+) => {
+  const page = await Page.findById(pageId);
+  if (!page) throw new ApiError(httpStatus.NOT_FOUND, 'Page not found');
+  const nextOrder = await Product.countDocuments({ pageId });
+  const product = await Product.create({
+    ...data,
+    pageId,
+    isPublished: true,
+    order: nextOrder,
+  });
+
+  return product;
+};
+
+export const updateProduct = async (
+  userId: string,
+  productId: string,
+  data: UpdateProductInput
+) => {
+  const product = await Product.findById(productId, { isDeleted: false });
+  if (!product) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Product not found');
+  }
+
+  const page = await Page.findById(product.pageId);
+  if (!page || page.isDeleted) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Page not found');
+  }
+
+  const isOwner = page.owner === userId;
+  const isAdmin = page.admins.includes(userId);
+  if (!isOwner && !isAdmin) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Unauthorized to update this product');
+  }
+
+  Object.assign(product, data);
+  product.updatedAt = new Date();
+  await product.save();
+
+  return product;
+};
+
+export const deleteProduct = async (pageId: Types.ObjectId, productId: string) => {
+  const product = await Product.findOne({
+    _id: productId,
+    pageId,
+    isDeleted: false,
+  });
+
+  if (!product) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Product not found or already deleted');
+  }
+
+  product.isDeleted = true;
+  product.deletedAt = new Date();
+
+  await product.save();
+  return product;
+};
+
+export const getProductsByPageSlug = async ({
+  slug,
+  search,
+  cursor,
+  limit = 10,
+  fields = 'attachments title slug',
+}: {
+  slug: string;
+  search?: string;
+  cursor?: string;
+  limit?: number;
+  fields?: string;
+}) => {
+  const page = await Page.findOne({ slug, isDeleted: false });
+  if (!page) throw new Error('Page not found');
+
+
+
+  const match: Record<string, any> = {
+    pageId: page._id,
+    isDeleted: false,
+    isPublished: true,
+    ...buildSearchQuery(search),
+  };
+
+  if (cursor) {
+    const decoded = decodeCursor(cursor);
+    if (decoded) {
+      match.$or = [
+        { createdAt: { $lt: decoded.createdAt } },
+        {
+          createdAt: decoded.createdAt,
+          _id: { $lt: decoded._id },
+        },
+      ];
+    }
+  }
+
+  const projection = fields
+    .split(',')
+    .reduce((acc, field) => ({ ...acc, [field.trim()]: 1 }), {});
+
+  const products = await Product.find(match)
+    .select(projection)
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(limit + 1);
+
+  const hasNextPage = products.length > limit;
+  const result = hasNextPage ? products.slice(0, -1) : products;
+
+  const last = result[result.length - 1] as { _id: Types.ObjectId; createdAt: Date };
+
+  const nextCursor = hasNextPage
+    ? encodeCursor({
+      _id: last._id,
+      createdAt: last.createdAt,
+    })
+    : null;
+
+  return {
+    products: result,
+    nextCursor,
+  };
+};
+
+export const getProductById = async (productId: string, fields: string = 'attachments title slug') => {
+  if (!Types.ObjectId.isValid(productId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid product ID');
+  }
+
+  const product = await Product.findById(productId).select(
+    fields ? fields.split(',').join(' ') : ''
+  );
+
+  if (!product) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Product not found');
+  }
+
+  return product;
+};
+
+// ------------------ CATEGORY SERVICES WITH PRODUCT / MEDIA ------------------------ //
+export const addMediaToCategory = async (
+  pageId: Types.ObjectId,
+  categoryId: string,
+  media: IMedia[]
+) => {
+  const page = await Page.findById(pageId);
+  if (!page) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Page not found');
+  }
+
+  const category = page.categories.id(categoryId);
+  if (!category) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Category not found');
+  }
+
+  if (category.type !== 'MEDIA') {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Category type is not MEDIA');
+  }
+
+  if (category.media.length + media.length > 10) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Max 10 media items allowed in a category');
+  }
+
+  // Assign `order` field to each media if not present
+  const nextOrder = category.media.length;
+  const enrichedMedia = media.map((m, i) => ({
+    ...m,
+    order: nextOrder + i,
+    uploadedAt: m.uploadedAt ?? new Date(),
+  }));
+
+  category.media.push(...enrichedMedia);
+  await page.save();
+
+  return category.media;
+};
+
+export const removeMediaFromCategory = async (
+  pageId: Types.ObjectId,
+  categoryId: string,
+  mediaUrl: string
+) => {
+  const page = await Page.findById(pageId);
+  if (!page) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Page not found');
+  }
+
+  const category = page.categories.id(categoryId);
+  if (!category) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Category not found');
+  }
+
+  if (category.type !== 'MEDIA') {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Category type is not MEDIA');
+  }
+
+  const originalLength = category.media.length;
+
+  category.media = category.media.filter((m) => m.url !== mediaUrl);
+
+  if (category.media.length === originalLength) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Media item not found in category');
+  }
+
+  // Reassign order after removal
+  category.media = category.media
+    .filter((m) => m.url !== mediaUrl)
+    .map((m, index) => ({
+      ...m,
+      order: index,
+    }));
+
+  await page.save();
+  return category.media;
+};

@@ -267,7 +267,30 @@ export const apis = {
         "name": "Electronics",
         "description": "All types of electronic gadgets and accessories",
         "type": "PRODUCTS"
+      },
+      "/:slug/products/create-product",
+      {
+        "title": "product 3",
+        "description": "Bluetooth 5.0, noise cancellation",
+        "tags": ["audio", "wireless", "earbuds"],
+        "price": 2999,
+        "discountedPrice": 1999,
+        "isInOffer": true,
+        "currency": "INR",
+        "buyLinks": ["https://example.com/product/earbuds"],
+        "attachments": [
+          {
+            "url": "https://your-s3-url.com/earbuds.jpg",
+            "type": "IMAGE",
+            "fileName": "earbuds.jpg",
+            "mimeType": "image/jpeg",
+            "size": 234567,
+            "width": 800,
+            "height": 800
+          }
+        ]
       }
+
     ],
     PATCH: [
       "/api/v1/pages/update-page/:slug",
@@ -296,9 +319,11 @@ export const apis = {
     ],
     GET: [
       "/api/v1/pages/:slug/followers?limit=10&cursor=user_abcd",
-      "/api/v1/pages/:slug/categories/all"
+      "/api/v1/pages/:slug/categories/all",
+      "/api/v1/pages/:slug/products?cursor=<next_product_id>&limit=5&search=wireless+earbuds&fields=price,currency,isInOffer",
+      "/api/v1/pages/products/:productId",
     ],
-    DELETE:[
+    DELETE: [
       "/api/v1/pages/:slug/categories/:categoryId",
     ]
   }

@@ -49,15 +49,18 @@ export type ReorderCategoriesInput = z.infer<typeof reorderCategoriesSchema>;
 export const createProductSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
-  price: z.number().positive(),
-  discountedPrice: z.number().positive().optional(),
-  buyLink: z.array(z.string().url()).optional(),
-  attachments: mediaArraySchema.optional(),
-  categoryId: z.string().min(1),
-  order: z.number().int().nonnegative().optional(),
+  tags: z.array(z.string()).optional(),
+  currency: z.string().default('INR'),
+  price: z.number().min(0),
+  discountedPrice: z.number().min(0).optional(),
+  isInOffer: z.boolean().optional(),
+  buyLinks: z.array(z.string().url()).optional(),
+  attachments: mediaArraySchema,
+});
+export type CreateProductInput = z.infer<typeof createProductSchema>;
+
+export const updateProductSchema = createProductSchema.extend({
+  isPublished: z.boolean().optional(),
 });
 
-export const updateProductSchema = createProductSchema.partial();
-
-export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
