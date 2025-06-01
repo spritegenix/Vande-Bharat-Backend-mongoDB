@@ -11,6 +11,7 @@ import routes from "@/routes"; // All combined route imports
 import { clerkMiddleware } from '@clerk/express'
 import { setupSwagger } from "./utils/swagger.utils";
 import { apis } from "./constants";
+import { routeLogger } from "./middlewares/logger";
 const app: Application = express();
 
 setupSwagger(app);
@@ -47,6 +48,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Clerk authentication middleware
 app.use(clerkMiddleware())
+app.use(routeLogger);
 
 // Health Check
 app.get("/health", (req: Request, res: Response) => {

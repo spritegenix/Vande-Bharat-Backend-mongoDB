@@ -1,11 +1,12 @@
 import { RequestHandler } from 'express';
 import { getAuth } from '@clerk/express';
 import { asyncHandler } from '@/utils/asyncHandler';
-import { addMediaToCategory, createCategory, createPage, createProduct, deleteCategory, deleteProduct, getPageFollowers, getProductById, getProductsByPageSlug, removeMediaFromCategory, reorderCategories, toggleFollowPage, updateCategory, updatePage, updateProduct } from '@/services/v1/page.service';
+import { addMediaToCategory, addProductToCategory, createCategory, createPage, createProduct, deleteCategory, deleteProduct, getPageFollowers, getProductById, getProductsByPageSlug, removeMediaFromCategory, removeProductFromCategory, reorderCategories, toggleFollowPage, updateCategory, updatePage, updateProduct } from '@/services/v1/page.service';
 import { createCategorySchema, createPageSchema, createProductSchema, reorderCategoriesSchema, updateCategorySchema, updateProductSchema } from '@/validators/v1/page.validators';
 import httpStatus from 'http-status';
 import { Page } from '@/models/page/page.model';
 import { ApiError } from '@/utils/ApiError';
+import { Types } from 'mongoose';
 
 // Middleware 
 export const assertPageAdmin = async (pageSlug: string, userId: string) => {
@@ -364,5 +365,89 @@ export const removeMediaFromCategoryHandler = asyncHandler(async (req, res) => {
     success: true,
     message: 'Media removed from category successfully',
     data: updatedMedia,
+  });
+});
+
+export const addProductToCategoryHandler = asyncHandler(async (req, res) => {
+  const { userId } = getAuth(req);
+  const { slug, categoryId } = req.params;
+  const { productId } = req.body;
+
+  if (!userId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
+  }
+
+  if (!productId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'productId is required');
+  }
+
+  const page = await assertPageAdmin(slug, userId);
+
+  const updatedProducts = await addProductToCategory(page._id, categoryId, new Types.ObjectId(productId as string));
+
+  res.status(200).json({
+    success: true,
+    message: 'Product added to category successfully',
+    data: updatedProducts,
+  });
+});
+
+export const removeProductFromCategoryHandler = asyncHandler(async (req, res) => {
+  const { userId } = getAuth(req);
+  const { slug, categoryId } = req.params;
+  const { productId } = req.body;
+
+  if (!userId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
+  }
+
+  if (!productId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'productId is required');
+  }
+
+  const page = await assertPageAdmin(slug, userId);
+
+  const updatedProducts = await removeProductFromCategory(
+    page._id,
+    categoryId,
+    new Types.ObjectId(productId)
+  );
+
+  res.status(200).json({
+    success: true,
+    message: 'Product removed from category successfully',
+    data: updatedProducts,
+  });
+});
+
+export const reorderCategoryItemsHandler = asyncHandler(async (req, res) => {
+  const { userId } = getAuth(req);
+  if (!userId) throw new ApiError(httpStatus.UNAUTHORIZED, 'Unauthorized user');
+
+  const { slug, categoryId } = req.params;
+  const { items } = req.body;
+
+  const page = await assertPageAdmin(slug, userId);
+
+  const category = page.categories.id(categoryId);
+  if (!category) throw new ApiError(httpStatus.NOT_FOUND, 'Category not found');
+
+  if (category.type === 'PRODUCTS') {
+    category.products.forEach((product) => {
+      const match = items.find((i: { id: string; order: number }) => i.id === product.productId.toString());
+      if (match) product.order = match.order;
+    });
+  } else if (category.type === 'MEDIA') {
+    category.media.forEach((media) => {
+      const match = items.find((i: { id: string; order: number }) => i.id === media._id?.toString());
+      if (match) media.order = match.order;
+    });
+  }
+
+  await page.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'Reordering successful',
   });
 });

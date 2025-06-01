@@ -64,3 +64,13 @@ export const updateProductSchema = createProductSchema.extend({
 });
 
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;
+
+// ---------------- REORDER PRODUCTS/ MEDIA ----------------- //
+export const reorderCategoryItemsSchema = z.object({
+  items: z.array(
+    z.object({
+      id: z.string().min(1), // media _id or productId
+      order: z.number().int().min(0),
+    })
+  )
+});

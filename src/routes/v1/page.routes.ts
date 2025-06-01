@@ -1,9 +1,10 @@
 import { Request, Response, Router } from 'express';
 import { requireAuth } from '@clerk/express';
-import { validateRequest } from '@/middlewares/validateRequest';
+import { findRoute, validateRequest } from '@/middlewares/validateRequest';
 import { env } from '@/config/zodSafeEnv';
-import { addMediaToCategoryHandler, createCategoryHandler, createPageHandler, createProductHandler, deleteCategoryHandler, deleteProductHandler, fetchPageFollowers, getCategoriesByPage, getProductByIdHandler, getProductsHandler, removeMediaFromCategoryHandler, reorderCategoriesHandler, toggleFollowPageHandler, updateCategoryHandler, updatePageHandler, updateProductHandler } from '@/controllers/v1/page.controller';
-import { createCategorySchema, createPageSchema, createProductSchema, reorderCategoriesSchema, updateCategorySchema, updatePageSchema, updateProductSchema } from '@/validators/v1/page.validators';
+import { addMediaToCategoryHandler, addProductToCategoryHandler, createCategoryHandler, createPageHandler, createProductHandler, deleteCategoryHandler, deleteProductHandler, fetchPageFollowers, getCategoriesByPage, getProductByIdHandler, getProductsHandler, removeMediaFromCategoryHandler, removeProductFromCategoryHandler, reorderCategoriesHandler, reorderCategoryItemsHandler, toggleFollowPageHandler, updateCategoryHandler, updatePageHandler, updateProductHandler } from '@/controllers/v1/page.controller';
+import { createCategorySchema, createPageSchema, createProductSchema, reorderCategoriesSchema, reorderCategoryItemsSchema, updateCategorySchema, updatePageSchema, updateProductSchema } from '@/validators/v1/page.validators';
+import { requestLogger } from '@/middlewares/requestLogger';
 
 const router = Router();
 
@@ -72,15 +73,43 @@ router.get('/products/:productId', getProductByIdHandler);
   ]
 }
 */
-router.patch( '/:slug/categories/:categoryId/media/add-media', requireAuth(), addMediaToCategoryHandler );
+router.patch('/:slug/categories/:categoryId/media/add-media', requireAuth(), addMediaToCategoryHandler);
 
 // PATCH /api/v1/pages/:slug/categories/:categoryId/media/remove-media
 /*
+{ "mediaUrl": "https://s3.amazonaws.com/your-bucket/image1.jpg" }
+*/
+router.patch('/:slug/categories/:categoryId/media/remove-media', requireAuth(), removeMediaFromCategoryHandler);
+
+// -------------------------------
+
+// PATCH /api/v1/pages/:slug/categories/:categoryId/product/add-product
+/*
+{ "productId": "product_id" }
+*/
+router.patch('/:slug/categories/:categoryId/product/add-product', requireAuth(), addProductToCategoryHandler);
+
+// PATCH /api/v1/pages/:slug/categories/:categoryId/products/remove-product
+/*
+ { "productId": "product_id" }
+ */
+router.patch('/:slug/categories/:categoryId/product/remove-product', requireAuth(), removeProductFromCategoryHandler);
+
+// PATCH /api/v1/pages/:slug/categories/:categoryId/media-product/reorder
+/*
 {
-  "mediaUrl": "https://s3.amazonaws.com/your-bucket/image1.jpg"
+  "items": [
+    { "id": "6835f85eb88357a2566d6ae0", "order": 0 },
+    { "id": "6835f85eb88357a2566d6ae0", "order": 1 }
+  ]
 }
 */
-router.patch( '/:slug/categories/:categoryId/media/remove-media', requireAuth(), removeMediaFromCategoryHandler );
+router.patch( '/:slug/categories/:categoryId/media-product/reorder', requireAuth(), validateRequest(reorderCategoryItemsSchema, 'body'), reorderCategoryItemsHandler );
+
+
+
+
+
 
 
 
@@ -98,7 +127,7 @@ export default router;
 
 /*
 page id: 6834955711b6bef7729cf27c - tech-enthusiasts
-category id : 683497db8860b4f860be6da7
+category id : 6834a090e98479dd0e659213
 product id : 6835f85eb88357a2566d6ae0
 
 */
