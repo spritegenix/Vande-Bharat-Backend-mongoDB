@@ -429,3 +429,111 @@ export const removeMediaFromCategory = async (
   await page.save();
   return category.media;
 };
+
+export const addProductToCategory = async (
+  pageId: Types.ObjectId,
+  categoryId: string,
+  productId: Types.ObjectId
+) => {
+  const page = await Page.findById(pageId);
+  if (!page) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Page not found');
+  }
+
+  const category = page.categories.id(categoryId);
+  if (!category) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Category not found');
+  }
+
+  if (category.type !== 'PRODUCTS') {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Category type is not PRODUCTS');
+  }
+
+const alreadyExists = category.products.some((product) => product.productId.toString() === productId.toString());
+  if (alreadyExists) {
+    throw new ApiError(httpStatus.CONFLICT, 'Product already exists in category');
+  }
+
+category.products.push({
+  productId,
+  order: category.products.length,
+});
+
+  await page.save();
+  return category.products;
+};
+
+export const removeProductFromCategory = async (
+  pageId: Types.ObjectId,
+  categoryId: string,
+  productId: Types.ObjectId
+) => {
+  const page = await Page.findById(pageId);
+  if (!page) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Page not found');
+  }
+
+  const category = page.categories.id(categoryId);
+  if (!category) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Category not found');
+  }
+
+  if (category.type !== 'PRODUCTS') {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Category type is not PRODUCTS');
+  }
+
+  const initialLength = category.products.length;
+
+  category.products = category.products.filter(
+    (p) => p.productId.toString() !== productId.toString()
+  );
+
+  if (category.products.length === initialLength) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Product not found in category');
+  }
+
+  // Reassign order after removal
+  category.products = category.products
+  .map((p, i) => ({
+    ...p,
+    order: i,
+  }));
+
+  await page.save();
+  return category.products;
+};
+
+export const reorderCategoryItems = async (
+  pageId: Types.ObjectId,
+  categoryId: string,
+  items: { id: string; order: number }[]
+) => {
+  const page = await Page.findById(pageId);
+  if (!page) throw new ApiError(httpStatus.NOT_FOUND, 'Page not found');
+
+  const category = page.categories.id(categoryId);
+  if (!category) throw new ApiError(httpStatus.NOT_FOUND, 'Category not found');
+
+  if (category.type === 'PRODUCTS') {
+    // ✅ Map to { productId, order }
+    const updated = items.map((entry) => ({
+      productId: new Types.ObjectId(entry.id),
+      order: entry.order,
+    }));
+    category.products = updated;
+  } else if (category.type === 'MEDIA') {
+    // ✅ Find & preserve original media while updating order
+    const updated = items.map((entry) => {
+      const media = category.media.find((m) => m._id?.toString() === entry.id);
+      if (!media) throw new ApiError(httpStatus.NOT_FOUND, `Media with id ${entry.id} not found`);
+      return {
+        ...media,
+        order: entry.order,
+      };
+    });
+    category.media = updated;
+  }
+
+  await page.save();
+  return category;
+};

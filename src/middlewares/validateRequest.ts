@@ -31,3 +31,11 @@ export const validateRequest = (
     }
   };
 };
+
+
+export const findRoute = () => {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    console.log("This route is working");
+    next();
+  };
+};

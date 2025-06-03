@@ -51,5 +51,8 @@ export const mediaSchema = new Schema<IMedia>(
     duration: { type: Number, required: function () { return this.type === 'VIDEO'; } },
     uploadedAt: { type: Date, default: Date.now },
   },
-  { _id: false } // embedded
+  {
+    _id: true,
+    timestamps: true,
+  }
 );
