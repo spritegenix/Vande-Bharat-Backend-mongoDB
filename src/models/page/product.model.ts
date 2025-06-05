@@ -3,6 +3,7 @@ import { auditPlugin } from '@/plugins/audit.plugin';
 import { IMedia, mediaSchema } from '../media.model';
 
 export interface IProduct extends Document {
+    _id: Types.ObjectId;
     title: string;
     description?: string;
     tags?: string[];

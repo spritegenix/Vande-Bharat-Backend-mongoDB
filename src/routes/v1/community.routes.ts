@@ -31,8 +31,8 @@ router.delete('/:slug/leave', requireAuth(), leaveCommunity);
 
 // --------------------------------------------------------------------- //
 
-// GET /api/v1/communities/:communitySlug/posts
-// GET /api/v1/communities/:communitySlug/posts?limit=10&sort=<newest|popular>
+// GET /api/v1/communities/:slug/posts
+// GET /api/v1/communities/:slug/posts?limit=10&sort=<newest|popular>
 router.get('/:slug/posts', fetchCommunityPosts); 
 
 

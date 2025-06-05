@@ -3,6 +3,7 @@ interface CursorData {
   _id: Types.ObjectId;
   createdAt: Date;
   score?: number; // optional, only used when sorting by "popular"
+  order?: number;
 }
 
 /**
@@ -13,6 +14,7 @@ export const encodeCursor = (data: CursorData): string => {
     _id: data._id.toString(),
     createdAt: data.createdAt.toISOString(),
     ...(data.score !== undefined && { score: data.score }),
+    ...(data.order !== undefined && { order: data.order }),
   };
 
   return Buffer.from(JSON.stringify(plainData)).toString('base64');
@@ -30,6 +32,7 @@ export const decodeCursor = (cursor: string): CursorData | null => {
       _id: new Types.ObjectId(parsed._id as string),
       createdAt: new Date(parsed.createdAt),
       score: parsed.score,
+      order: parsed.order,
     };
   } catch (err) {
     console.error('Invalid cursor format:', err);

@@ -94,36 +94,64 @@ export const getCommunityBySlug = async (slug: string, fields: string[]) => {
     return community;
 };
 
-export const getCommunityMembers = async ({ communitySlug, limit, cursor, }: { communitySlug: string; limit: number; cursor?: string; }) => {
-    const community = await Community.findOne({ slug: communitySlug, isDeleted: false });
+export const getCommunityMembers = async ({
+  communitySlug,
+  limit,
+  cursor,
+}: {
+  communitySlug: string;
+  limit: number;
+  cursor?: string;
+}) => {
+  const community = await Community.findOne({ slug: communitySlug, isDeleted: false });
 
-    if (!community) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
-    }
+  if (!community) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Community not found');
+  }
 
-    const allUserIds: string[] = [
-        community.owner,
-        ...community.admins.filter((id) => id !== community.owner),
-        ...community.members.filter((id) => id !== community.owner && !community.admins.includes(id)),
-    ];
+  const allUserIds: string[] = [
+    community.owner,
+    ...community.admins.filter((id) => id !== community.owner),
+    ...community.members.filter(
+      (id) => id !== community.owner && !community.admins.includes(id)
+    ),
+  ];
 
-    const startIndex = cursor ? allUserIds.indexOf(cursor) + 1 : 0;
-    const paginatedIds = allUserIds.slice(startIndex, startIndex + limit);
-    const nextCursor = allUserIds[startIndex + limit] || null;
+  const startIndex = cursor ? allUserIds.indexOf(cursor) + 1 : 0;
+  const paginatedIds = allUserIds.slice(startIndex, startIndex + limit);
+  const nextCursor = allUserIds[startIndex + limit] || null;
 
-    const users = await UserModel.find({ userId: { $in: paginatedIds } })
-        .select('userId name slug avatar')
-        .lean();
+  const users = await UserModel.find({ userId: { $in: paginatedIds } })
+    .select('userId name slug avatar')
+    .lean();
 
-    // maintain original order
-    const userMap = new Map(users.map((u) => [u.userId, u]));
-    const orderedUsers = paginatedIds.map((id) => userMap.get(id)).filter(Boolean);
+  // Maintain original order and attach role
+  const userMap = new Map(users.map((u) => [u.userId, u]));
+  const orderedUsers = paginatedIds
+    .map((id) => {
+      const user = userMap.get(id);
+      if (!user) return null;
 
-    return {
-        members: orderedUsers,
-        nextCursor,
-    };
+      let role: 'owner' | 'admin' | 'member' = 'member';
+      if (id === community.owner) {
+        role = 'owner';
+      } else if (community.admins.includes(id)) {
+        role = 'admin';
+      }
+
+      return {
+        ...user,
+        role,
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    members: orderedUsers,
+    nextCursor,
+  };
 };
+
 
 export const deleteCommunityBySlug = async (ownerUserId: string, communitySlug: string) => {
   const community = await Community.findOne({ slug: communitySlug, isDeleted: false });
@@ -150,7 +178,7 @@ export const deleteCommunityBySlug = async (ownerUserId: string, communitySlug: 
   return { message: 'Community and its posts deleted successfully' };
 };
 
-export const getPostsByCommunity = async ({ communitySlug, userId, limit, cursor, sort }:{ communitySlug: string; userId?: string; limit: number; cursor?: string; sort: 'newest' | 'popular'; }) => {
+export const getPostsByCommunitySlug = async ({ communitySlug, userId, limit, cursor, sort }:{ communitySlug: string; userId?: string; limit: number; cursor?: string; sort: 'newest' | 'popular'; }) => {
  // 1. Find the community by slug
   const community = await Community.findOne({ slug: communitySlug, isDeleted: false });
   if (!community) {

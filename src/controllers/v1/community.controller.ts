@@ -103,7 +103,7 @@ export const deleteCommunity = asyncHandler(async (req, res) => {
 
     const result = await communityService.deleteCommunityBySlug(userId, communitySlug);
 
-    res.status(200).json({
+      res.status(httpStatus.OK).json({
         success: true,
         message: result.message,
     });
@@ -117,7 +117,7 @@ export const fetchCommunityPosts = asyncHandler(async (req, res) => {
     return res.status(401).json({ success: false, message: 'Unauthorized user' });
   }
 
-  const result = await communityService.getPostsByCommunity({
+  const result = await communityService.getPostsByCommunitySlug({
     communitySlug: slug,
     userId,
     cursor: cursor as string,
