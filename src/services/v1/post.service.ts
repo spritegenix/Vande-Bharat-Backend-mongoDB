@@ -177,7 +177,7 @@ export const getPosts = async ({
 
   const followedPosts = userId
     ? await PostModel.aggregate(
-      buildPostPipeline({ match: followedMatch!, sort, limit })
+      buildPostPipeline({ match: followedMatch!, sort, limit: limit + 1 })
     )
     : [];
 
@@ -199,7 +199,7 @@ export const getPosts = async ({
 
   const publicPosts = !userId
     ? await PostModel.aggregate(
-      buildPostPipeline({ match: baseMatch, sort, limit })
+      buildPostPipeline({ match: baseMatch, sort, limit: limit + 1  })
     )
     : [];
 
