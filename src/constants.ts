@@ -64,6 +64,10 @@ export const COMMUNITY_ALLOWED_FIELDS = [
   'updatedAt',
 ];
 
+//----------------- PAGE PRODUCTS---------------------------- //
+export const PAGE_ITEMS_LIMIT = 5;
+export const PAGE_PRODUCTS_DEFAULT_FIELDS = ["title", "price", "discountedPrice", "currency", "attachments", "isInOffer", "buyLinks"];
+
 
 
 

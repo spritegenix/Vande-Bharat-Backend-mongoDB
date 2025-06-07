@@ -2,7 +2,7 @@ import { Request, Response, Router } from 'express';
 import { requireAuth } from '@clerk/express';
 import { findRoute, validateRequest } from '@/middlewares/validateRequest';
 import { env } from '@/config/zodSafeEnv';
-import { addMediaToCategoryHandler, addProductToCategoryHandler, createCategoryHandler, createPageHandler, createProductHandler, deleteCategoryHandler, deleteProductHandler, fetchPageFollowers, getCategoriesByPage, getProductByIdHandler, getProductsHandler, removeMediaFromCategoryHandler, removeProductFromCategoryHandler, reorderCategoriesHandler, reorderCategoryItemsHandler, toggleFollowPageHandler, updateCategoryHandler, updatePageHandler, updateProductHandler } from '@/controllers/v1/page.controller';
+import { addMediaToCategoryHandler, addProductToCategoryHandler, createCategoryHandler, createPageHandler, createProductHandler, deleteCategoryHandler, deletePageHandler, deleteProductHandler, fetchPageFollowers, fetchPagePosts, getAllCategoriesByPageSlugHandler, getCategoryItemsHandler, getPageAdminsHandler, getProductByIdHandler, getProductsHandler, removeMediaFromCategoryHandler, removeProductFromCategoryHandler, reorderCategoriesHandler, reorderCategoryItemsHandler, toggleFollowPageHandler, togglePageAdminHandler, updateCategoryHandler, updatePageHandler, updateProductHandler } from '@/controllers/v1/page.controller';
 import { createCategorySchema, createPageSchema, createProductSchema, reorderCategoriesSchema, reorderCategoryItemsSchema, updateCategorySchema, updatePageSchema, updateProductSchema } from '@/validators/v1/page.validators';
 import { requestLogger } from '@/middlewares/requestLogger';
 
@@ -14,8 +14,20 @@ router.post('/create-page', requireAuth(), validateRequest(createPageSchema), cr
 // PATCH /api/v1/pages/:slug
 router.patch('/:slug', requireAuth(), validateRequest(updatePageSchema), updatePageHandler);
 
-// POST /api/v1/pages/:slug/follow
-router.post('/:slug/follow', requireAuth(), toggleFollowPageHandler);
+// DELETE /api/v1/pages/:pageId
+router.delete('/:pageSlug', requireAuth(), deletePageHandler);
+
+// PATCH /api/v1/pages/:slug/admins/:userSlug - make user admin
+// PATCH /api/v1/pages/:slug/admins/:userSlug?remove-admin=true  - remove user admin
+router.patch('/:slug/admins/:userSlug', requireAuth(), togglePageAdminHandler);
+
+// GET /api/v1/pages/:slug/admins
+router.get('/:slug/admins/all', getPageAdminsHandler);
+
+// --------------------FOLLOW AND FOLLOWERS----------------------------- //
+
+// POST /api/v1/pages/:slug/follow-unfollow
+router.post('/:slug/follow-unfollow', requireAuth(), toggleFollowPageHandler);
 
 // GET /api/v1/pages/:slug/followers?limit=10&cursor=user_abcd
 router.get('/:slug/followers', fetchPageFollowers);
@@ -34,7 +46,7 @@ router.delete('/:slug/categories/:categoryId', requireAuth(), deleteCategoryHand
 router.patch('/:slug/categories/order/reorder', requireAuth(), validateRequest(reorderCategoriesSchema, 'body'), reorderCategoriesHandler);
 
 // GET /api/v1/pages/:slug/categories/all
-router.get('/:slug/categories/all', getCategoriesByPage);
+router.get('/:slug/categories/all', getAllCategoriesByPageSlugHandler);
 
 // ------------------ PRODUCT ------------------ //
 
@@ -95,6 +107,7 @@ router.patch('/:slug/categories/:categoryId/product/add-product', requireAuth(),
  */
 router.patch('/:slug/categories/:categoryId/product/remove-product', requireAuth(), removeProductFromCategoryHandler);
 
+// ------------------------------ PAGE CATEGORY ITEMS REORDER AND FETCH ------------------------------- //
 // PATCH /api/v1/pages/:slug/categories/:categoryId/media-product/reorder
 /*
 {
@@ -104,7 +117,19 @@ router.patch('/:slug/categories/:categoryId/product/remove-product', requireAuth
   ]
 }
 */
-router.patch( '/:slug/categories/:categoryId/media-product/reorder', requireAuth(), validateRequest(reorderCategoryItemsSchema, 'body'), reorderCategoryItemsHandler );
+router.patch('/:slug/categories/:categoryId/media-product/reorder', requireAuth(), validateRequest(reorderCategoryItemsSchema, 'body'), reorderCategoryItemsHandler);
+
+// GET /api/v1/pages/:slug/categories/:categoryId/all/items?limit=10&cursor=<next_item_id>&product_fields=<title,price,slug,...>
+router.get('/:slug/categories/:categoryId/all/items', getCategoryItemsHandler)
+
+// ------------------------------------------------------------------------ //
+// GET /api/v1/pages/:slug/posts
+// GET /api/v1/pages/:slug/posts?limit=10&sort=<newest|popular>
+// GET /api/v1/pages/:slug/posts?limit=10&sort=<newest|popular>&cursor=<next_post_id>
+router.get('/:slug/posts', fetchPagePosts); 
+
+
+
 
 
 

@@ -1,12 +1,13 @@
 import { RequestHandler } from 'express';
 import { getAuth } from '@clerk/express';
 import { asyncHandler } from '@/utils/asyncHandler';
-import { addMediaToCategory, addProductToCategory, createCategory, createPage, createProduct, deleteCategory, deleteProduct, getPageFollowers, getProductById, getProductsByPageSlug, removeMediaFromCategory, removeProductFromCategory, reorderCategories, toggleFollowPage, updateCategory, updatePage, updateProduct } from '@/services/v1/page.service';
+import { addMediaToCategory, addProductToCategory, createCategory, createPage, createProduct, deleteCategory, deletePageBySlug, deleteProduct, getCategoriesByPage, getCategoryItems, getPageAdmins, getPageFollowers, getPostsByPageSlug, getProductById, getProductsByPageSlug, removeMediaFromCategory, removeProductFromCategory, reorderCategories, toggleFollowPage, togglePageAdminBySlug, updateCategory, updatePage, updateProduct } from '@/services/v1/page.service';
 import { createCategorySchema, createPageSchema, createProductSchema, reorderCategoriesSchema, updateCategorySchema, updateProductSchema } from '@/validators/v1/page.validators';
 import httpStatus from 'http-status';
 import { Page } from '@/models/page/page.model';
 import { ApiError } from '@/utils/ApiError';
 import { Types } from 'mongoose';
+import { PAGE_ITEMS_LIMIT, POSTS_PAGE_LIMIT } from '@/constants';
 
 // Middleware 
 export const assertPageAdmin = async (pageSlug: string, userId: string) => {
@@ -66,6 +67,52 @@ export const updatePageHandler = asyncHandler(async (req, res) => {
   const updatedPage = await updatePage(userId, slug, req.body);
   res.status(200).json({ success: true, data: updatedPage });
 });
+
+export const deletePageHandler = asyncHandler(async (req, res) => {
+  const { userId } = getAuth(req);
+  if (!userId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
+  }
+  const { pageSlug } = req.params;
+
+  const result = await deletePageBySlug(pageSlug, userId);
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    message: result.message,
+  });
+});
+
+export const togglePageAdminHandler = asyncHandler(async (req, res) => {
+  const { userId } = getAuth(req);
+  if (!userId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
+  }
+  const { slug: pageSlug, userSlug } = req.params;
+  const remove = req.query['remove-admin'] === 'true';
+
+  const result = await togglePageAdminBySlug(pageSlug, userSlug, userId, remove);
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    message: result.message,
+    data: null,
+  });
+});
+
+export const getPageAdminsHandler = asyncHandler(async (req, res) => {
+  const { slug } = req.params;
+
+  const admins = await getPageAdmins(slug);
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    message: 'Admins fetched successfully',
+    data: admins,
+  });
+});
+
+// --------------------FOLLOW AND FOLLOWERS----------------------------- //
 
 export const toggleFollowPageHandler = asyncHandler(async (req, res) => {
   const { userId } = getAuth(req);
@@ -198,21 +245,14 @@ export const reorderCategoriesHandler = asyncHandler(async (req, res) => {
   });
 });
 
-export const getCategoriesByPage = asyncHandler(async (req, res) => {
+export const getAllCategoriesByPageSlugHandler = asyncHandler(async (req, res) => {
   const { slug } = req.params;
+  const result = await getCategoriesByPage(slug);
 
-  const page = await Page.findOne({ slug, isDeleted: false }).select('categories');
-
-  if (!page) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Page not found');
-  }
-
-  const categories = [...page.categories].sort((a, b) => a.order - b.order);
-
-  res.status(200).json({
+  res.status(httpStatus.OK).json({
     success: true,
     message: 'Categories fetched successfully',
-    data: categories,
+    data: result,
   });
 });
 
@@ -420,6 +460,7 @@ export const removeProductFromCategoryHandler = asyncHandler(async (req, res) =>
   });
 });
 
+// ------------------------------ PAGE CATEGORY ITEMS REORDER AND FETCH ------------------------------- //
 export const reorderCategoryItemsHandler = asyncHandler(async (req, res) => {
   const { userId } = getAuth(req);
   if (!userId) throw new ApiError(httpStatus.UNAUTHORIZED, 'Unauthorized user');
@@ -449,5 +490,44 @@ export const reorderCategoryItemsHandler = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Reordering successful',
+  });
+});
+
+export const getCategoryItemsHandler = asyncHandler(async (req, res) => {
+  const { slug, categoryId } = req.params;
+  const { cursor, limit = PAGE_ITEMS_LIMIT, product_fields } = req.query;
+
+  const result = await getCategoryItems({
+    pageSlug: slug,
+    categoryId,
+    fields: product_fields as string,
+    cursor: cursor as string | undefined,
+    limit: parseInt(limit as string, 10) || PAGE_ITEMS_LIMIT,
+  });
+
+  res.status(httpStatus.OK).json({
+    success: true,
+    message: 'Category items fetched successfully',
+    data: result.items,
+    nextCursor: result.nextCursor,
+  });
+});
+
+// ------------------------------ PAGE POST ITEMS REORDER AND FETCH ------------------------------- //
+export const fetchPagePosts = asyncHandler(async (req, res) => {
+  const { slug } = req.params;
+  const { cursor, limit = POSTS_PAGE_LIMIT, sort = 'newest' } = req.query;
+
+  const result = await getPostsByPageSlug({
+    pageSlug: slug,
+    cursor: cursor as string,
+    limit: parseInt(limit as string),
+    sort: sort as 'newest' | 'popular',
+  });
+
+  res.status(200).json({
+    success: true,
+    data: result.posts,
+    nextCursor: result.nextCursor,
   });
 });

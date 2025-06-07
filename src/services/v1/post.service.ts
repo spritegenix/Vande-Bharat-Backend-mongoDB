@@ -13,15 +13,16 @@ import { buildPostPipeline } from '@/utils/postPipelineBuilder';
 import { LikeModel } from '@/models/like.model';
 import { BookmarkModel } from '@/models/bookmark.model';
 import { decodeCursor, encodeCursor } from '@/utils/cursor';
+import { IMedia } from '@/models/media.model';
 
 export const createPost = async ({ userId, data }: { userId: string; data: createPostInput; }) => {
   const { content, tags, attachments, pageId, communityId, isHidden } = data;
 
   // Validate page ownership
   if (pageId) {
-    const page = await Page.findOne({ _id: pageId, isDeleted: false }).select('owner');
-    if (!page || !(page.owner === userId)) {
-      throw new ApiError(httpStatus.FORBIDDEN, 'You are not the owner of this page');
+    const page = await Page.findOne({ _id: pageId, isDeleted: false }).select('owner admins');
+    if (!page || !(page.owner === userId || page.admins.includes(userId))) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'You are not the owner or admin of this page');
     }
   }
 
@@ -78,7 +79,8 @@ export const updatePost = async ({ postId, userId, data }: { postId: string; use
   // Update post fields
   if (content !== undefined) post.content = content;
   if (tags !== undefined) post.tags = tags;
-  if (attachments !== undefined) post.attachments = attachments;
+  if (attachments !== undefined)  post.attachments = attachments.filter((att): att is IMedia => att !== undefined);
+
   if (isHidden !== undefined) post.isHidden = isHidden;
 
   await post.save();
@@ -107,21 +109,7 @@ export const deletePost = async ({ postId, userId }: { postId: string; userId: s
   return post;
 };
 
-export const getPosts = async ({
-  userId,
-  sort = 'newest',
-  limit = 10,
-  cursor,
-  checkLike,
-  checkBookmark
-}: {
-  userId?: string;
-  sort?: 'popular' | 'newest';
-  limit?: number;
-  cursor?: string;
-  checkLike?: boolean;
-  checkBookmark?: boolean;
-}) => {
+export const getPosts = async ({ userId, sort = 'newest', limit = 10, cursor, checkLike, checkBookmark }: { userId?: string; sort?: 'popular' | 'newest'; limit?: number; cursor?: string; checkLike?: boolean; checkBookmark?: boolean; }) => {
   let followedUserIds: string[] = [];
   let followedPageIds: Types.ObjectId[] = [];
 
@@ -596,16 +584,16 @@ export const getRepliesByCommentId = async (
 
   let sortedReplies = replies;
 
-  // if (userId) {
-  //   const [userReplies, others] = replies.reduce<[any[], any[]]>(
-  //     (acc, reply) => {
-  //       reply.userId === userId ? acc[0].push(reply) : acc[1].push(reply);
-  //       return acc;
-  //     },
-  //     [[], []]
-  //   );
-  //   sortedReplies = [...userReplies, ...others];
-  // }
+  if (userId) {
+    const [userReplies, others] = replies.reduce<[any[], any[]]>(
+      (acc, reply) => {
+        reply.userId === userId ? acc[0].push(reply) : acc[1].push(reply);
+        return acc;
+      },
+      [[], []]
+    );
+    sortedReplies = [...userReplies, ...others];
+  }
 
   const nextCursor = sortedReplies.length === REPLIES_PAGE_LIMIT
     ? sortedReplies[sortedReplies.length - 1]._id
