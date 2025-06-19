@@ -10,7 +10,10 @@ const router = Router();
 // GET /api/v1/users/me
 // GET /api/v1/users/me?fields=<field1,field2,field3>
 router.get('/me', requireAuth(), userController.getMyProfile);
-
+router.get("/suggestions", requireAuth(), userController.getSuggestions)
+router.get("/followed", requireAuth(), userController.getFollowingUsers)
+router.get("/sent-requests", requireAuth(), userController.getSentRequests)
+router.post("/follow-request/:toUserId", requireAuth(), userController.handleSendFollowRequest)
 // PATCH /api/v1/users/me
 router.patch('/me', requireAuth(), validateRequest(updateUserSchema, 'body'), userController.updateUser);
 
