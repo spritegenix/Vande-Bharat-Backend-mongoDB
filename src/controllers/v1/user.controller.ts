@@ -1,6 +1,6 @@
 import { RequestHandler } from 'express';
 import * as userService from '@/services/v1/user.service';
-import { getAuth } from '@clerk/express';
+import { getAuth, User } from '@clerk/express';
 import httpStatus from 'http-status';
 import { asyncHandler } from '@/utils/asyncHandler';
 import { updateUserSchema } from '@/validators/v1/user.validator';
@@ -58,6 +58,23 @@ const getSuggestions:RequestHandler = asyncHandler(async(req,res)=> {
   });
 })
 
+const handleDelete: RequestHandler = asyncHandler(async (req, res) => {
+  const { userId } = getAuth(req);
+  const { id: toUserId } = req.params;
+
+  if (!userId) {
+    return res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized' });
+  }
+
+  const deletedRequest = await userService.deleteSuggestion(userId, toUserId);
+
+  return res.status(httpStatus.OK).json({
+    success: true,
+    message: "Deleted Suggestion",
+    data: deletedRequest,
+  });
+});
+
 
 
 const getFollowingUsers: RequestHandler = asyncHandler(async (req, res) => {
@@ -102,4 +119,27 @@ const {userId} = getAuth(req)
   res.status(httpStatus.OK).json({ success: true, data: followingUser });
 })
 
-export { getMyProfile, updateUser, getFollowingUsers, handleSendFollowRequest, getSuggestions,getSentRequests };
+
+const handleRejectRequest:RequestHandler = asyncHandler(async(req,res)=>{
+  const {userId} = getAuth(req)
+  const {toUserId} = req.params
+  if (!userId) {
+    res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized, user not found' });
+    return;
+  }
+  const rejectRequest = await userService.rejectRequest(userId, toUserId)
+   res.status(httpStatus.OK).json({ success: true, data: rejectRequest });
+})
+
+const handleCancelFollowRequest:RequestHandler = asyncHandler(async(req,res)=> {
+  const {userId} = getAuth(req)
+   const {toUserId} = req.params
+   if (!userId) {
+    res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized, user not found' });
+    return;
+  }
+  const requestCancel = await userService.cancelRequest(userId, toUserId)
+    res.status(httpStatus.OK).json({ success: true, message: 'Follow request cancelled', data: requestCancel });
+})
+
+export { getMyProfile, updateUser, getFollowingUsers, handleSendFollowRequest, getSuggestions,getSentRequests, handleRejectRequest , handleCancelFollowRequest, handleDelete };
