@@ -45,7 +45,7 @@ const getFollowedProfiles = async (userId: string) => {
   if (!currentUser) return [];
 
   const currentUserId = new mongoose.Types.ObjectId(currentUser._id);
-console.log("currentUserId", currentUserId)
+
   const sentRequestUserIds = await FollowRequestModel.find({
     fromUserId: currentUserId,
     status: { $in: ['PENDING', 'CANCELLED'] },
