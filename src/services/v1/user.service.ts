@@ -45,13 +45,13 @@ const getFollowedProfiles = async (userId: string) => {
   if (!currentUser) return [];
 
   const currentUserId = new mongoose.Types.ObjectId(currentUser._id);
-
   const sentRequestUserIds = await FollowRequestModel.find({
-    fromUserId: currentUserId,
-    status: { $in: ['PENDING', 'CANCELLED'] },
-    isDeleted: false,
-  }).distinct('toUserId');
-
+  fromUserId: currentUserId,
+  $or: [
+    { status: { $in: ['PENDING'] } },
+    { isDeleted: true },
+  ],
+}).distinct('toUserId');
   const excludeIds: mongoose.Types.ObjectId[] = [
     currentUserId,
     ...(currentUser.following || []),
@@ -147,16 +147,47 @@ const sentRequests = async (userId: string) => {
   const user = await UserModel.findOne({ userId }).select("_id").lean();
   if (!user) throw new ApiError(httpStatus.CONFLICT, "No user found");
 
-  const sentRequests = await FollowRequestModel.aggregate([
+   const sentRequests = await FollowRequestModel.aggregate([
     {
       $match: {
         fromUserId: user._id,
-        isDeleted: false,
         status: 'PENDING',
+        isDeleted: false,
       },
     },
     {
-      $sort: { updatedAt: -1 }, // ✅ sort by most recent updates
+      // Lookup for reverse request where they rejected
+      $lookup: {
+        from: "followrequests",
+        let: { recipient: "$toUserId", me: "$fromUserId" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$fromUserId", "$$recipient"] },
+                  { $eq: ["$toUserId", "$$me"] },
+                  {
+                    $or: [
+                      { $eq: ["$status", "CANCELLED"] },
+                      { $eq: ["$isDeleted", true] },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+        ],
+        as: "rejectionRecord",
+      },
+    },
+    {
+      $match: {
+        rejectionRecord: { $eq: [] }, // exclude if reverse rejection exists
+      },
+    },
+    {
+      $sort: { updatedAt: -1 },
     },
     {
       $lookup: {
@@ -166,9 +197,7 @@ const sentRequests = async (userId: string) => {
         as: "toUser",
       },
     },
-    {
-      $unwind: "$toUser",
-    },
+    { $unwind: "$toUser" },
     {
       $project: {
         _id: 1,
@@ -186,6 +215,101 @@ const sentRequests = async (userId: string) => {
   return sentRequests;
 };
 
+const acceptRequest = async (userId: string, fromUserId: string) => {
+  const toUserId = await UserModel.findOne({ userId }).select("_id").lean();
+  if (!toUserId) throw new ApiError(httpStatus.CONFLICT, "no user found");
+ 
+  const request = await FollowRequestModel.findOneAndUpdate(
+    { fromUserId, toUserId, status: "PENDING" },
+    { status: "ACCEPTED" },
+    { new: true }
+  );
+  
+  if (!request) throw new ApiError(httpStatus.NOT_FOUND, "No pending follow request found");
+  // Add to following list
+  const User = await UserModel.findOne({ _id: fromUserId }).select("_id").lean();
+  if (!User) throw new ApiError(httpStatus.NOT_FOUND, "To user not found")
+
+  await UserModel.updateOne(
+    { _id: User._id },
+    { $addToSet: { following: toUserId._id } }
+  );
+  await UserModel.updateOne(
+  { _id: toUserId._id },
+  { $addToSet: { followers: User._id } }
+);
+
+ return {
+    request,
+    message: "Follow request accepted successfully",
+  };
+
+}
+const getRecievedRequests = async (userId: string) => {
+  const user = await UserModel.findOne({ userId }).select("_id").lean();
+  if (!user) throw new ApiError(httpStatus.CONFLICT, "No user found");
+  const receivedRequests = await FollowRequestModel.aggregate([
+    {
+      $match: {
+        toUserId: user._id,
+        status: "PENDING",
+        isDeleted: false,
+      },
+    },
+    {
+      // Lookup if this user already cancelled the same request
+      $lookup: {
+        from: "followrequests",
+        let: { requester: "$fromUserId", me: "$toUserId" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$fromUserId", "$$me"] },
+                  { $eq: ["$toUserId", "$$requester"] },
+                  { $or: [
+                    { $eq: ["$status", "CANCELLED"] },
+                    { $eq: ["$isDeleted", true] },
+                  ] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "myCancelRecord",
+      },
+    },
+    {
+      $match: {
+        myCancelRecord: { $eq: [] }, // Only keep those with no cancellation by me
+      },
+    },
+    { $sort: { updatedAt: -1 } },
+    {
+      $lookup: {
+        from: "users",
+        localField: "fromUserId",
+        foreignField: "_id",
+        as: "fromUser",
+      },
+    },
+    { $unwind: "$fromUser" },
+    {
+      $project: {
+        _id: 1,
+        fromUserId: 1,
+        toUserId: 1,
+        updatedAt: 1,
+        "fromUser.slug": 1,
+        "fromUser.avatar": 1,
+        "fromUser.banner": 1,
+        "fromUser.name": 1,
+      },
+    },
+  ]);
+  return receivedRequests;
+}
 
 const rejectRequest = async(userId:string, toUserId:string)=> {
 
@@ -200,7 +324,6 @@ const fromUserId = await UserModel.findOne({userId}).select("_id").lean()
 const cancelRequest = async(userId:string, toUserId:string)=> {
   const fromUserId = await UserModel.findOne({userId}).select("_id").lean()
   if (!fromUserId) throw new ApiError(httpStatus.CONFLICT, "no user found");
-  console.log("fromuser", fromUserId, "toUser", toUserId)
   const result = await FollowRequestModel.findOneAndUpdate({fromUserId, toUserId,status: 'PENDING', isDeleted: false,  }, {
     status: "CANCELLED",
     updatedAt: new Date()
@@ -213,4 +336,4 @@ const cancelRequest = async(userId:string, toUserId:string)=> {
 }
 
 
-export { getUserByClerkId, updateUser, getFollowedProfiles, sendFollowRequest, getUserSuggestions, sentRequests, rejectRequest, cancelRequest, deleteSuggestion };
+export { getUserByClerkId, updateUser, getFollowedProfiles, sendFollowRequest, getUserSuggestions, sentRequests, rejectRequest, cancelRequest, deleteSuggestion, acceptRequest, getRecievedRequests };

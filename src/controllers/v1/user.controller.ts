@@ -108,6 +108,21 @@ const handleSendFollowRequest: RequestHandler = asyncHandler(async (req, res) =>
   });
 });
 
+const handleAcceptRequest: RequestHandler = asyncHandler(async (req, res) => {
+const { userId } = getAuth(req)
+const { fromUserId } = req.params
+
+if (!userId) {
+  res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized, user not found' });
+  return;
+}
+const acceptRequest = await userService.acceptRequest(userId, fromUserId);
+res.status(httpStatus.OK).json({
+  success: true,
+  message: 'Follow request accepted',
+  data: acceptRequest,
+});
+})
 const getSentRequests:RequestHandler = asyncHandler(async(req,res)=> {
 const {userId} = getAuth(req)
   if (!userId) {
@@ -119,6 +134,16 @@ const {userId} = getAuth(req)
   res.status(httpStatus.OK).json({ success: true, data: followingUser });
 })
 
+const getRecievedRequests:RequestHandler = asyncHandler(async(req,res)=> {
+const {userId} = getAuth(req)
+  if (!userId) {
+    res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized, user not found' });
+    return;
+  }
+  //check his following list
+  const followingUser = await userService.getRecievedRequests(userId);
+  res.status(httpStatus.OK).json({ success: true, data: followingUser });
+})
 
 const handleRejectRequest:RequestHandler = asyncHandler(async(req,res)=>{
   const {userId} = getAuth(req)
@@ -142,4 +167,4 @@ const handleCancelFollowRequest:RequestHandler = asyncHandler(async(req,res)=> {
     res.status(httpStatus.OK).json({ success: true, message: 'Follow request cancelled', data: requestCancel });
 })
 
-export { getMyProfile, updateUser, getFollowingUsers, handleSendFollowRequest, getSuggestions,getSentRequests, handleRejectRequest , handleCancelFollowRequest, handleDelete };
+export { getMyProfile, updateUser, getFollowingUsers, handleSendFollowRequest, getSuggestions,getSentRequests, handleRejectRequest , handleCancelFollowRequest, handleDelete, handleAcceptRequest, getRecievedRequests};
