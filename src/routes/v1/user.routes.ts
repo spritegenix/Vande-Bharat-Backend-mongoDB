@@ -12,7 +12,9 @@ const router = Router();
 router.get('/me', requireAuth(), userController.getMyProfile);
 router.get("/suggestions", requireAuth(), userController.getSuggestions)
 router.patch("/suggestions/:id/delete", requireAuth(), userController.handleDelete)
-router.get("/followed", requireAuth(), userController.getFollowingUsers)
+
+router.get("/following", requireAuth(), userController.getUserFollowing)
+router.patch("/following/:toUserId/unfriend", requireAuth(), userController.handleUserUnfriend)
 router.get("/sent-requests", requireAuth(), userController.getSentRequests)
 router.get("/recieved-requests", requireAuth(), userController.getRecievedRequests)
 router.post("/follow-request/:toUserId/send", requireAuth(), userController.handleSendFollowRequest)

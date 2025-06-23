@@ -78,3 +78,24 @@ export const updateUserByAdminSchema = userBaseSchema.extend({
 });
 
 export type UpdateUserByAdminInput = z.infer<typeof updateUserByAdminSchema>;
+
+
+
+export const generalPaginationSchema = z.object({
+  cursor: z.string().optional(), // You can further check if it's a MongoDB ID using regex if needed
+  limit: z
+    .string()
+    .transform((val) => parseInt(val)) // transform to number
+    .refine((val) => !isNaN(val) && val > 0 && val <= 50, {
+      message: "Limit must be a number between 1 and 50",
+    })
+    .optional()
+    .default("10"),
+});
+
+export const toUserIdParamsSchema = z.object({
+  toUserId: z
+    .string()
+    .min(1, "User ID must not be empty")
+    .length(24, "User ID must be a 24-character MongoDB ObjectId"),
+});

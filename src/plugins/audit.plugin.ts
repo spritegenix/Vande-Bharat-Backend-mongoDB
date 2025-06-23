@@ -88,9 +88,11 @@ export function auditPlugin(schema: Schema, options: { modelName: string }) {
   // Block hard deletes
 
     // Block hard deletes
-    const blockHardDelete = () => {
-      throw new Error('❌ Hard deletes are disabled. Use softDelete instead.');
-    };
+  const blockHardDelete = () => {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('❌ Hard deletes are disabled. Use softDelete instead.');
+  }
+};
   
     schema.pre('findOneAndDelete', blockHardDelete);
     schema.pre('deleteOne', blockHardDelete);

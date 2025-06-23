@@ -3,7 +3,7 @@ import * as userService from '@/services/v1/user.service';
 import { getAuth, User } from '@clerk/express';
 import httpStatus from 'http-status';
 import { asyncHandler } from '@/utils/asyncHandler';
-import { updateUserSchema } from '@/validators/v1/user.validator';
+import { generalPaginationSchema, toUserIdParamsSchema, updateUserSchema,  } from '@/validators/v1/user.validator';
 import { ALLOWED_FIELDS, DEFAULT_FIELDS } from '@/constants';
 
 // GET /api/v1/users/me
@@ -50,11 +50,21 @@ const getSuggestions:RequestHandler = asyncHandler(async(req,res)=> {
     res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized' });
     return;
   }
-    const suggestions = await userService.getUserSuggestions(userId);
+  const parseResult = generalPaginationSchema.safeParse(req.query);
+   if (!parseResult.success) {
+    return res.status(httpStatus.BAD_REQUEST).json({
+      success: false,
+      message: "Invalid query params",
+      errors: parseResult.error.flatten().fieldErrors,
+    });
+  }
+    const { cursor, limit } = parseResult.data;
 
+   const { data, nextCursor } = await userService.getUserSuggestions({userId, limit, cursor});
   res.status(httpStatus.OK).json({
     success: true,
-    data: suggestions,
+    data,
+    nextCursor, 
   });
 })
 
@@ -77,18 +87,48 @@ const handleDelete: RequestHandler = asyncHandler(async (req, res) => {
 
 
 
-const getFollowingUsers: RequestHandler = asyncHandler(async (req, res) => {
+const getUserFollowing: RequestHandler = asyncHandler(async (req, res) => {
   //get user
   const { userId } = getAuth(req);
   if (!userId) {
     res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized, user not found' });
     return;
   }
+
+  const parseResult = generalPaginationSchema.safeParse(req.query)
+  if (!parseResult.success) {
+    return res.status(httpStatus.BAD_REQUEST).json({
+      success: false,
+      message: "Invalid query params",
+      errors: parseResult.error.flatten().fieldErrors,
+    });
+  }
   //check his following list
-  const followingUser = await userService.getFollowedProfiles(userId);
-  res.status(httpStatus.OK).json({ success: true, data: followingUser });
+  const {cursor, limit} = parseResult.data
+  const {data, nextCursor} = await userService.getFollowingProfiles({userId, limit, cursor});
+  res.status(httpStatus.OK).json({ success: true, data, nextCursor });
 });
 
+const handleUserUnfriend:RequestHandler = asyncHandler(async (req, res) => {
+  const { userId } = getAuth(req);
+  if (!userId) {
+    res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized, user not found' });
+    return;
+  }
+  
+  const parseResult = toUserIdParamsSchema.safeParse(req.params)
+  if (!parseResult.success) {
+    return res.status(httpStatus.BAD_REQUEST).json({
+      success: false,
+      message: "Invalid query params",
+      errors: parseResult.error.flatten().fieldErrors,
+    });
+  }
+  const {  toUserId } = parseResult.data;
+  const unfriended = await userService.unfriendUser({userId, toUserId});
+  res.status(httpStatus.OK).json({ success: true, data:unfriended, message: 'User unfriended successfully' });
+
+})
 
 
 const handleSendFollowRequest: RequestHandler = asyncHandler(async (req, res) => {
@@ -129,9 +169,19 @@ const {userId} = getAuth(req)
     res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized, user not found' });
     return;
   }
+const parseResult = generalPaginationSchema.safeParse(req.query)
+  if (!parseResult.success) {
+    return res.status(httpStatus.BAD_REQUEST).json({
+      success: false,
+      message: "Invalid query params",
+      errors: parseResult.error.flatten().fieldErrors,
+    });
+  }
+  const { cursor, limit } = parseResult.data;
   //check his following list
-  const followingUser = await userService.sentRequests(userId);
-  res.status(httpStatus.OK).json({ success: true, data: followingUser });
+  const {data, nextCursor} = await userService.sentRequests({userId, limit, cursor});
+  res.status(httpStatus.OK).json({ success: true,   data,
+    nextCursor,  });
 })
 
 const getRecievedRequests:RequestHandler = asyncHandler(async(req,res)=> {
@@ -140,9 +190,20 @@ const {userId} = getAuth(req)
     res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized, user not found' });
     return;
   }
+  const parseResult = generalPaginationSchema.safeParse(req.query)
+  if (!parseResult.success) {
+    return res.status(httpStatus.BAD_REQUEST).json({
+      success: false,
+      message: "Invalid query params",
+      errors: parseResult.error.flatten().fieldErrors,
+    });
+  }
+      const { cursor, limit } = parseResult.data;
+
   //check his following list
-  const followingUser = await userService.getRecievedRequests(userId);
-  res.status(httpStatus.OK).json({ success: true, data: followingUser });
+  const {data, nextCursor} = await userService.getRecievedRequests({userId, limit, cursor});
+    res.status(httpStatus.OK).json({ success: true,   data,
+    nextCursor,  });
 })
 
 const handleRejectRequest:RequestHandler = asyncHandler(async(req,res)=>{
@@ -167,4 +228,4 @@ const handleCancelFollowRequest:RequestHandler = asyncHandler(async(req,res)=> {
     res.status(httpStatus.OK).json({ success: true, message: 'Follow request cancelled', data: requestCancel });
 })
 
-export { getMyProfile, updateUser, getFollowingUsers, handleSendFollowRequest, getSuggestions,getSentRequests, handleRejectRequest , handleCancelFollowRequest, handleDelete, handleAcceptRequest, getRecievedRequests};
+export { getMyProfile, updateUser, getUserFollowing, handleSendFollowRequest, getSuggestions,getSentRequests, handleRejectRequest , handleCancelFollowRequest, handleDelete, handleAcceptRequest, getRecievedRequests, handleUserUnfriend};

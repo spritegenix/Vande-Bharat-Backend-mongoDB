@@ -5,7 +5,11 @@ import { generateSlug } from '@/utils/generateSlug';
 import { UpdateUserInput } from '@/validators/v1/user.validator';
 import httpStatus from 'http-status';
 import mongoose, { Types } from 'mongoose';
-
+interface CursorParams {
+  userId: string;
+  limit?: number;
+  cursor?: string; // Mongo ObjectId
+}
 const getUserByClerkId = async (userId: string, fields: string) => {
   const user = await UserModel.findOne({ userId }).select(fields).lean();
   if (!user || user.isDeleted) {
@@ -27,22 +31,48 @@ const updateUser = async (userId: string, updates: UpdateUserInput) => {
   return user;
 };
 
-const getFollowedProfiles = async (userId: string) => {
+const getFollowingProfiles = async ({userId, limit= 10, cursor}: CursorParams) => {
   const user = await UserModel.findOne({ userId }).select('following').lean();
-  if (!user) return [];
-  const followingUsers = await UserModel.find({ userId: { $in: user.following } })
-    .select('name avatar slug')
+    if (!user || !user.following?.length) return { data: [], nextCursor: null };
+      const matchCondition: any = {
+    _id: { $in: user.following.map((id: any) => new Types.ObjectId(id)) },
+  };
+
+  // Apply cursor logic
+  if (cursor) {
+    matchCondition._id.$lt = new Types.ObjectId(cursor); // paginate backwards by _id
+  }
+
+  const followingUsers = await UserModel.find(matchCondition)
+    .sort({ _id: -1 }) // newest followed profiles first
+    .limit(limit)
+    .select("name avatar slug")
     .lean();
-  return followingUsers;
+  const nextCursor =
+    followingUsers.length === limit
+      ? followingUsers[followingUsers.length - 1]._id.toString()
+      : null;
+  return {
+    data: followingUsers,
+    nextCursor,
+  };
 };
 
+const unfriendUser = async({userId, toUserId}: {userId: string, toUserId: string}) => {
+  const user = await UserModel.findOne({ userId }).select('_id following').lean();
+  if (!user) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+ 
+  const toUser = await UserModel.findOne({ _id:toUserId }).select('_id followers').lean();
 
- const getUserSuggestions = async (userId: string) => {
+
+}
+
+ const getUserSuggestions = async ({userId, limit, cursor}: CursorParams) => {
   const currentUser = await UserModel.findOne({ userId })
     .select('following _id')
     .lean();
 
-  if (!currentUser) return [];
+  if (!currentUser) return {suggestions : [], nextCursor: null};
 
   const currentUserId = new mongoose.Types.ObjectId(currentUser._id);
   const sentRequestUserIds = await FollowRequestModel.find({
@@ -57,16 +87,18 @@ const getFollowedProfiles = async (userId: string) => {
     ...(currentUser.following || []),
     ...sentRequestUserIds,
   ];
-
-  const suggestions = await UserModel.aggregate([
+    // Build aggregation pipeline
+  const pipeline: any[] = [
     {
       $match: {
         _id: { $nin: excludeIds },
         isDeleted: false,
         isBlocked: false,
+        ...(cursor ? { _id: { $gt: new mongoose.Types.ObjectId(cursor) } } : {}),
       },
     },
-    { $sample: { size: 10 } },
+    { $sort: { _id: 1 } }, // oldest to newest
+    { $limit: limit },
     {
       $project: {
         _id: 1,
@@ -75,11 +107,31 @@ const getFollowedProfiles = async (userId: string) => {
         slug: 1,
       },
     },
-  ]);
+  ];
 
-  return suggestions;
+  // const suggestions = await UserModel.aggregate([
+  //   {
+  //     $match: {
+  //       _id: { $nin: excludeIds },
+  //       isDeleted: false,
+  //       isBlocked: false,
+  //     },
+  //   },
+  //   { $sample: { size: 10 } },
+  //   {
+  //     $project: {
+  //       _id: 1,
+  //       name: 1,
+  //       avatar: 1,
+  //       slug: 1,
+  //     },
+  //   },
+  // ]);
+const suggestions = await UserModel.aggregate(pipeline);
+const nextCursor = suggestions.length === limit ? suggestions[suggestions.length - 1]._id.toString() : null;
+
+  return { data: suggestions, nextCursor };
 };
-
 
 const deleteSuggestion = async (fromUserId: string, toUserId: string) => {
   const user = await UserModel.findOne({ userId: fromUserId }).select("_id").lean();
@@ -117,7 +169,6 @@ const deleteSuggestion = async (fromUserId: string, toUserId: string) => {
   return result;
 };
 
-
 const sendFollowRequest = async (fromUserId: string, toUserId: string) => {
   if (fromUserId === toUserId) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'You cannot follow yourself');
@@ -143,18 +194,20 @@ const sendFollowRequest = async (fromUserId: string, toUserId: string) => {
   return followRequest;
 };
 
-const sentRequests = async (userId: string) => {
+const sentRequests = async ({userId, limit=10, cursor}: CursorParams) => {
   const user = await UserModel.findOne({ userId }).select("_id").lean();
   if (!user) throw new ApiError(httpStatus.CONFLICT, "No user found");
 
+   const matchConditions: any = {
+    fromUserId: user._id,
+    status: 'PENDING',
+    isDeleted: false,
+  };
+  if (cursor) {
+    matchConditions.updatedAt = { $lt: new Date(cursor) }; // fetch older ones
+  }
    const sentRequests = await FollowRequestModel.aggregate([
-    {
-      $match: {
-        fromUserId: user._id,
-        status: 'PENDING',
-        isDeleted: false,
-      },
-    },
+     { $match: matchConditions },
     {
       // Lookup for reverse request where they rejected
       $lookup: {
@@ -189,6 +242,9 @@ const sentRequests = async (userId: string) => {
     {
       $sort: { updatedAt: -1 },
     },
+     {
+      $limit: limit,
+    },
     {
       $lookup: {
         from: "users",
@@ -211,8 +267,16 @@ const sentRequests = async (userId: string) => {
       },
     },
   ]);
+  const nextCursor =
+    sentRequests.length === limit
+      ? sentRequests[sentRequests.length - 1].updatedAt.toISOString()
+      : null;
 
-  return sentRequests;
+ 
+  return {
+    data: sentRequests,
+    nextCursor,
+  };
 };
 
 const acceptRequest = async (userId: string, fromUserId: string) => {
@@ -245,17 +309,20 @@ const acceptRequest = async (userId: string, fromUserId: string) => {
   };
 
 }
-const getRecievedRequests = async (userId: string) => {
+
+const getRecievedRequests = async ({userId, limit=10, cursor}: CursorParams) => {
   const user = await UserModel.findOne({ userId }).select("_id").lean();
   if (!user) throw new ApiError(httpStatus.CONFLICT, "No user found");
+   const matchConditions: any = {
+    toUserId: user._id,
+    status: "PENDING",
+    isDeleted: false,
+  };
+   if (cursor) {
+    matchConditions.updatedAt = { $lt: new Date(cursor) };
+  }
   const receivedRequests = await FollowRequestModel.aggregate([
-    {
-      $match: {
-        toUserId: user._id,
-        status: "PENDING",
-        isDeleted: false,
-      },
-    },
+    { $match: matchConditions },
     {
       // Lookup if this user already cancelled the same request
       $lookup: {
@@ -286,6 +353,7 @@ const getRecievedRequests = async (userId: string) => {
       },
     },
     { $sort: { updatedAt: -1 } },
+      { $limit: limit },
     {
       $lookup: {
         from: "users",
@@ -308,7 +376,14 @@ const getRecievedRequests = async (userId: string) => {
       },
     },
   ]);
-  return receivedRequests;
+    const nextCursor =
+    receivedRequests.length === limit
+      ? receivedRequests[receivedRequests.length - 1].updatedAt.toISOString()
+      : null;
+ return {
+    data: receivedRequests,
+    nextCursor,
+  };
 }
 
 const rejectRequest = async(userId:string, toUserId:string)=> {
@@ -336,4 +411,4 @@ const cancelRequest = async(userId:string, toUserId:string)=> {
 }
 
 
-export { getUserByClerkId, updateUser, getFollowedProfiles, sendFollowRequest, getUserSuggestions, sentRequests, rejectRequest, cancelRequest, deleteSuggestion, acceptRequest, getRecievedRequests };
+export { getUserByClerkId, updateUser, getFollowingProfiles, sendFollowRequest, getUserSuggestions, sentRequests, rejectRequest, cancelRequest, deleteSuggestion, acceptRequest, getRecievedRequests, unfriendUser };
