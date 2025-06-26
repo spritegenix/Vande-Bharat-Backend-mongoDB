@@ -1,8 +1,8 @@
-import { Schema, model, Types, Document } from 'mongoose';
+import mongoose, { Schema, model, Types, Document } from 'mongoose';
 import { auditPlugin } from '@/plugins/audit.plugin';
 
 export interface IBookmark extends Document {
-  userId: String; // Clerk ID
+  userId: Types.ObjectId; // Clerk ID
   postId: Types.ObjectId;
   createdAt: Date;
   isDeleted?: boolean;
@@ -11,7 +11,7 @@ export interface IBookmark extends Document {
 
 const bookmarkSchema = new Schema<IBookmark>(
   {
-    userId: { type: String, ref: 'User', required: true, index: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     postId: { type: Schema.Types.ObjectId, ref: 'Post', required: true, index: true },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },

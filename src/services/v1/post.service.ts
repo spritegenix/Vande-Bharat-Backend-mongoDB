@@ -14,9 +14,14 @@ import { LikeModel } from '@/models/like.model';
 import { BookmarkModel } from '@/models/bookmark.model';
 import { decodeCursor, encodeCursor } from '@/utils/cursor';
 import { IMedia } from '@/models/media.model';
+import { FollowRequestModel } from '@/models/userFollowRequestModel.model';
 
-export const createPost = async ({ userId, data }: { userId: string; data: createPostInput; }) => {
+export const createPost = async ({ userId, data }: { userId: string; data: createPostInput }) => {
   const { content, tags, attachments, pageId, communityId, isHidden } = data;
+const getUserId = await UserModel.findOne({ userId }).select('userId').lean();
+  if (!getUserId) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
 
   // Validate page ownership
   if (pageId) {
@@ -28,7 +33,9 @@ export const createPost = async ({ userId, data }: { userId: string; data: creat
 
   // Validate community membership/ownership/admin
   if (communityId) {
-    const community = await Community.findOne({ _id: communityId, isDeleted: false }).select('owner members admins');
+    const community = await Community.findOne({ _id: communityId, isDeleted: false }).select(
+      'owner members admins',
+    );
 
     const isAuthorized =
       community?.owner === userId ||
@@ -38,7 +45,7 @@ export const createPost = async ({ userId, data }: { userId: string; data: creat
     if (!community || !isAuthorized) {
       throw new ApiError(
         httpStatus.FORBIDDEN,
-        'You are not a member, owner, or admin of this community'
+        'You are not a member, owner, or admin of this community',
       );
     }
   }
@@ -47,7 +54,7 @@ export const createPost = async ({ userId, data }: { userId: string; data: creat
   const newPost = await PostModel.create({
     content,
     tags: tags || [],
-    userId: userId,
+    userId: getUserId,
     pageId: pageId ? new Types.ObjectId(pageId) : undefined,
     communityId: communityId ? new Types.ObjectId(communityId) : undefined,
     attachments: attachments || [],
@@ -60,12 +67,20 @@ export const createPost = async ({ userId, data }: { userId: string; data: creat
   return newPost;
 };
 
-export const updatePost = async ({ postId, userId, data }: { postId: string; userId: string; data: UpdatePostInput; }) => {
+export const updatePost = async ({
+  postId,
+  userId,
+  data,
+}: {
+  postId: string;
+  userId: string;
+  data: UpdatePostInput;
+}) => {
   if (!Types.ObjectId.isValid(postId)) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID');
   }
 
-  const post = await PostModel.findOne({ _id: postId, isDeleted: false, });
+  const post = await PostModel.findOne({ _id: postId, isDeleted: false });
   if (!post) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Post not found or deleted');
   }
@@ -79,22 +94,22 @@ export const updatePost = async ({ postId, userId, data }: { postId: string; use
   // Update post fields
   if (content !== undefined) post.content = content;
   if (tags !== undefined) post.tags = tags;
-  if (attachments !== undefined)  post.attachments = attachments.filter((att): att is IMedia => att !== undefined);
+  if (attachments !== undefined)
+    post.attachments = attachments.filter((att): att is IMedia => att !== undefined);
 
   if (isHidden !== undefined) post.isHidden = isHidden;
 
   await post.save();
 
   return post;
-
 };
 
-export const deletePost = async ({ postId, userId }: { postId: string; userId: string; }) => {
+export const deletePost = async ({ postId, userId }: { postId: string; userId: string }) => {
   if (!Types.ObjectId.isValid(postId)) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID');
   }
 
-  const post = await PostModel.findOne({ _id: postId, isDeleted: false, });
+  const post = await PostModel.findOne({ _id: postId, isDeleted: false });
   if (!post) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Post not found or deleted already');
   }
@@ -109,102 +124,114 @@ export const deletePost = async ({ postId, userId }: { postId: string; userId: s
   return post;
 };
 
-export const getPosts = async ({ userId, sort = 'newest', limit = 10, cursor, checkLike, checkBookmark }: { userId?: string; sort?: 'popular' | 'newest'; limit?: number; cursor?: string; checkLike?: boolean; checkBookmark?: boolean; }) => {
-  let followedUserIds: string[] = [];
+
+export const getPosts = async ({
+  userId,
+  sort = 'newest',
+  limit = 10,
+  cursor,
+  checkLike = true,
+  checkBookmark = true,
+}: {
+  userId?: string;
+  sort?: 'popular' | 'newest';
+  limit?: number;
+  cursor?: string;
+  checkLike?: boolean;
+  checkBookmark?: boolean;
+}) => {
+  const decodedCursor = cursor ? decodeCursor(cursor) : null;
+  const cursorSource = decodedCursor?.source || 'followed';
+
+  let followedUserIds: Types.ObjectId[] = [];
   let followedPageIds: Types.ObjectId[] = [];
+const user = userId ? await UserModel.findOne({ userId }).select('_id').lean() : null;
 
   if (userId) {
-    const user = await UserModel.findOne({ userId })
-      .select('following pages')
-      .lean();
-    followedUserIds = user?.following?.map((id) => id.toString()) || [];
-    followedPageIds = user?.pages || [];
+    const user = await UserModel.findOne({ userId }).select('following pages').lean();
+    followedUserIds = user?.following || [];
+    followedPageIds = user?.pages || []; 
   }
 
-  let cursorFilter: any = {};
-  if (cursor) {
-    // const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString());
-    const decoded = decodeCursor(cursor);
-    if (!decoded) return { posts: [], nextCursor: null };
-    cursorFilter =
-      sort === 'popular'
-        ? {
-          $or: [
-            { score: { $lt: decoded.score } },
-            {
-              score: decoded.score,
-              _id: { $lt: new Types.ObjectId(decoded._id) },
-            },
-          ],
-        }
-        : {
-          $or: [
-            { createdAt: { $lt: new Date(decoded.createdAt) } },
-            {
-              createdAt: new Date(decoded.createdAt),
-              _id: { $lt: new Types.ObjectId(decoded._id) },
-            },
-          ],
-        };
-  }
-
-  const baseMatch = {
-    isDeleted: false,
-    ...cursorFilter,
-  };
+  const baseMatch = { isDeleted: false };
 
   const followedMatch = userId
     ? {
-      ...baseMatch,
-      $or: [
-        { userId: { $in: followedUserIds } },
-        { pageId: { $in: followedPageIds } },
-      ],
-    }
-    : null;
+        ...baseMatch,
+        $or: [
+          { userId: { $in: followedUserIds } },
+          { pageId: { $in: followedPageIds } },
+        ],
+      }
+    : baseMatch;
 
-  const followedPosts = userId
-    ? await PostModel.aggregate(
-      buildPostPipeline({ match: followedMatch!, sort, limit: limit + 1 })
-    )
-    : [];
+  const excludeMatch = userId
+    ? {
+        ...baseMatch,
+        $nor: [
+          { userId: { $in: followedUserIds } },
+          { pageId: { $in: followedPageIds } },
+        ],
+      }
+    : baseMatch;
 
+  let followedPosts: any[] = [];
   let remainingPosts: any[] = [];
-  if (userId && followedPosts.length < limit) {
-    const excludeIds = followedPosts.map((p) => p._id);
-    const excludeMatch = {
-      ...baseMatch,
-      $nor: [
-        { userId: { $in: followedUserIds } },
-        { pageId: { $in: followedPageIds } },
-      ],
-    };
 
+  if (cursorSource === 'followed') {
+    followedPosts = await PostModel.aggregate(
+      buildPostPipeline({
+        match: followedMatch,
+        sort,
+        limit: limit + 1,
+        cursor: decodedCursor,
+      })
+    );
+followedPosts.forEach((post) => {
+  post.isFollowed = true;
+});
+    if (followedPosts.length < limit + 1 && userId) {
+      const excludeIds = followedPosts.map((p) => p._id);
+      remainingPosts = await PostModel.aggregate(
+        buildPostPipeline({
+          match: excludeMatch,
+          sort,
+          limit: limit - followedPosts.length + 1,
+          excludeIds,
+        })
+      );
+    }
+  } else {
     remainingPosts = await PostModel.aggregate(
-      buildPostPipeline({ match: excludeMatch, sort, limit: limit - followedPosts.length, excludeIds })
+      buildPostPipeline({
+        match: excludeMatch,
+        sort,
+        limit: limit + 1,
+        cursor: decodedCursor,
+      })
     );
   }
 
-  const publicPosts = !userId
-    ? await PostModel.aggregate(
-      buildPostPipeline({ match: baseMatch, sort, limit: limit + 1  })
-    )
-    : [];
+  const posts = [...followedPosts, ...remainingPosts];
 
-  const posts = userId ? [...followedPosts, ...remainingPosts] : publicPosts;
-
+  // --- Cursor pagination ---
   let nextCursor = null;
-  const hasNextPage = posts.length === limit;
+  const hasNextPage = posts.length === limit + 1;
+
   if (hasNextPage) {
-    const last = posts[posts.length - 1];
+    const last = posts[limit];
 
     nextCursor = encodeCursor({
       _id: last._id,
       createdAt: new Date(last.createdAt),
+      source: followedPosts.length === limit + 1 ? 'followed' : 'remaining',
       ...(sort === 'popular' && { score: last.score }),
     });
+
+    posts.pop(); // Remove the extra one
   }
-  // ------ Check Likes and Bookmarks ------ //
+
+  // --- Check likes and bookmarks ---
   if (userId && (checkLike || checkBookmark) && posts.length > 0) {
     const postIds = posts.map((p) => p._id.toString());
 
@@ -213,36 +240,56 @@ export const getPosts = async ({ userId, sort = 'newest', limit = 10, cursor, ch
 
     if (checkLike) {
       const likes = await LikeModel.find({
-        userId,
+         userId: user?._id,
         postId: { $in: postIds },
         isDeleted: false,
       }).select('postId');
 
-      likedMap = likes.reduce((acc, like) => {
+      likedMap = likes.reduce<Record<string, boolean>>((acc, like) => {
         acc[like.postId.toString()] = true;
         return acc;
-      }, {} as Record<string, boolean>);
+      }, {});
     }
 
     if (checkBookmark) {
       const bookmarks = await BookmarkModel.find({
-        userId,
+         userId: user?._id,
         postId: { $in: postIds },
         isDeleted: false,
       }).select('postId');
 
-      bookmarkedMap = bookmarks.reduce((acc, bm) => {
+      bookmarkedMap = bookmarks.reduce<Record<string, boolean>>((acc, bm) => {
         acc[bm.postId.toString()] = true;
         return acc;
-      }, {} as Record<string, boolean>);
+      }, {});
     }
 
-    // Inject into each post
-    for (const post of posts) {
+   if (userId && posts.length > 0) {
+  const followedSet = new Set(followedUserIds.map((id) => id.toString()));
+
+  const requestDocs = await FollowRequestModel.find({
+    fromUserId: user?._id,
+    toUserId: { $in: posts.map((p) => p.userId._id) },
+    status: 'PENDING',
+    isDeleted: false,
+  }).select('toUserId');
+
+  const requestSet = new Set(requestDocs.map((r) => r.toUserId.toString()));
+
+  for (const post of posts) {
+    const postUserIdStr = post.userId._id.toString();
       const postIdStr = post._id.toString();
-      post.isLiked = likedMap[postIdStr] || false;
-      post.isBookmarked = bookmarkedMap[postIdStr] || false;
-    }
+    post.isFollowed = followedSet.has(postUserIdStr);
+    post.requestStatus = requestSet.has(postUserIdStr) ? 'PENDING' : null;
+    if (checkLike) {
+    post.isLiked = likedMap[postIdStr] || false;
+  }
+
+  if (checkBookmark) {
+    post.isBookmarked = bookmarkedMap[postIdStr] || false;
+  }
+  }
+}
   }
 
   return {
@@ -250,6 +297,7 @@ export const getPosts = async ({ userId, sort = 'newest', limit = 10, cursor, ch
     nextCursor,
   };
 };
+
 
 export const getUserPosts = async ({
   userId,
@@ -263,6 +311,10 @@ export const getUserPosts = async ({
   cursor?: string;
 }) => {
   const baseMatch: any = { isDeleted: false };
+const getUser = await UserModel.findOne({ userId }).select('userId').lean();
+  if (!getUser) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
 
   if (cursor) {
     const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString());
@@ -276,26 +328,24 @@ export const getUserPosts = async ({
   }
 
   let match: any = { ...baseMatch };
-
   if (filter === 'created') {
-    match.userId = userId;
+    match.userId = getUser;
   } else if (filter === 'liked') {
-    match.likes = { $in: [userId] };
+    match.likes = { $in: [getUser] };
   } else if (filter === 'commented' || filter === 'replied') {
     const comments = await CommentModel.find({
-      userId,
+      getUser,
       isDeleted: false,
       ...(filter === 'replied' ? { parentCommentId: { $ne: null } } : {}),
-    }).select('postId').lean();
+    })
+      .select('postId')
+      .lean();
 
     const postIds = [...new Set(comments.map((c) => c.postId.toString()))];
     match._id = { $in: postIds.map((id) => new Types.ObjectId(id)) };
   }
 
-  const posts = await PostModel.find(match)
-    .sort({ createdAt: -1, _id: -1 })
-    .limit(limit)
-    .lean();
+  const posts = await PostModel.find(match).sort({ createdAt: -1, _id: -1 }).limit(limit).lean();
 
   let nextCursor = null;
   if (posts.length === limit) {
@@ -304,7 +354,7 @@ export const getUserPosts = async ({
       JSON.stringify({
         createdAt: last.createdAt,
         _id: last._id,
-      })
+      }),
     ).toString('base64');
   }
 
@@ -314,7 +364,12 @@ export const getUserPosts = async ({
   };
 };
 
-export const getPostById = async (postId: string, userId?: string | null, checkLike?: boolean, checkBookmark?: boolean) => {
+export const getPostById = async (
+  postId: string,
+  userId?: string | null,
+  checkLike?: boolean,
+  checkBookmark?: boolean,
+) => {
   const post = await PostModel.findById(postId)
     .populate({
       path: 'userId',
@@ -345,19 +400,14 @@ export const getPostById = async (postId: string, userId?: string | null, checkL
     }
   }
 
-
   return {
     post,
     isBookmarkedByUser,
-    isLikedByUser
+    isLikedByUser,
   };
 };
 
-export const createComment = async (
-  userId: string,
-  postId: string,
-  data: CreateCommentInput
-) => {
+export const createComment = async (userId: string, postId: string, data: CreateCommentInput) => {
   // console.log(`"userId": ${userId}, \n "postId": ${postId},\n "data": ${JSON.stringify(data)}`);
   const { content, parentCommentId } = data;
 
@@ -405,10 +455,7 @@ export const createComment = async (
   }
 
   // Increment comment count on post
-  await PostModel.updateOne(
-    { _id: postId },
-    { $inc: { commentCount: 1 } }
-  );
+  await PostModel.updateOne({ _id: postId }, { $inc: { commentCount: 1 } });
 
   const populatedComment = await CommentModel.findById(comment._id)
     .populate({
@@ -418,13 +465,12 @@ export const createComment = async (
     .lean();
 
   return populatedComment;
-
 };
 
 export const updateComment = async (
   userId: string,
   commentId: string,
-  data: UpdateCommentInput
+  data: UpdateCommentInput,
 ) => {
   if (!Types.ObjectId.isValid(commentId)) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid comment ID');
@@ -465,19 +511,12 @@ export const deleteComment = async (userId: string, commentId: string) => {
   await comment.save();
 
   // Decrement comment count on related post
-  await PostModel.updateOne(
-    { _id: comment.postId },
-    { $inc: { commentCount: -1 } }
-  );
+  await PostModel.updateOne({ _id: comment.postId }, { $inc: { commentCount: -1 } });
 
   return comment;
 };
 
-export const fetchPostComments = async (
-  postId: string,
-  userId?: string,
-  cursor?: string
-) => {
+export const fetchPostComments = async (postId: string, userId?: string, cursor?: string) => {
   if (!Types.ObjectId.isValid(postId)) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID');
   }
@@ -508,14 +547,13 @@ export const fetchPostComments = async (
   // Move user's own comments to top if authenticated
   let reordered = comments;
   if (userId) {
-    const userComments = comments.filter(c => c.userId === userId);
-    const otherComments = comments.filter(c => c.userId !== userId);
+    const userComments = comments.filter((c) => c.userId === userId);
+    const otherComments = comments.filter((c) => c.userId !== userId);
     reordered = [...userComments, ...otherComments];
   }
 
-  const nextCursor = comments.length === COMMENTS_PAGE_LIMIT
-    ? comments[comments.length - 1]._id.toString()
-    : null;
+  const nextCursor =
+    comments.length === COMMENTS_PAGE_LIMIT ? comments[comments.length - 1]._id.toString() : null;
 
   return {
     comments: reordered,
@@ -549,7 +587,7 @@ export const fetchCommentById = async (commentId: string) => {
 export const getRepliesByCommentId = async (
   commentId: string,
   cursor?: string,
-  userId?: string
+  userId?: string,
 ) => {
   if (!Types.ObjectId.isValid(commentId)) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid comment ID');
@@ -590,14 +628,15 @@ export const getRepliesByCommentId = async (
         reply.userId === userId ? acc[0].push(reply) : acc[1].push(reply);
         return acc;
       },
-      [[], []]
+      [[], []],
     );
     sortedReplies = [...userReplies, ...others];
   }
 
-  const nextCursor = sortedReplies.length === REPLIES_PAGE_LIMIT
-    ? sortedReplies[sortedReplies.length - 1]._id
-    : null
+  const nextCursor =
+    sortedReplies.length === REPLIES_PAGE_LIMIT
+      ? sortedReplies[sortedReplies.length - 1]._id
+      : null;
 
   return {
     replies: sortedReplies,

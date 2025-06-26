@@ -6,7 +6,7 @@ export interface IPost extends Document {
   _id: Types.ObjectId;
   content: string;
   tags?: string[];
-  userId: string;
+  userId: Types.ObjectId;
   pageId?: Types.ObjectId | null;
   communityId?: Types.ObjectId | null;
   attachments?: IMedia[];
@@ -30,7 +30,7 @@ const postSchema = new Schema<IPost>(
       maxlength: 1000,
     },
     tags: [{ type: String }],
-    userId: { type: String, ref: 'User', required: true },
+    userId: { type:  mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     pageId: { type: Schema.Types.ObjectId, ref: 'Page', default: null },
     communityId: { type: Schema.Types.ObjectId, ref: 'Community', default: null },
     attachments: {

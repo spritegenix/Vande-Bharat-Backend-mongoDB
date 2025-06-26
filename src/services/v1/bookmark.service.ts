@@ -3,28 +3,32 @@ import { Types } from 'mongoose';
 import { ApiError } from '@/utils/ApiError';
 import httpStatus from 'http-status';
 import { LikeModel } from '@/models/like.model';
+import { UserModel } from '@/models/user.model';
+
+import mongoose from 'mongoose';
 
 export const toggleBookmark = async (userId: string, postId: string) => {
   try {
-    const existing = await BookmarkModel.findOne({ userId, postId });
+    const user = await UserModel.findOne({ userId }).select('_id').lean();
+    if (!user) throw new Error(`User not found with userId: ${userId}`);
+
+    const existing = await BookmarkModel.findOne({ userId: user._id, postId });
 
     if (existing && !existing.isDeleted) {
-      // Soft delete (unbookmark)
       existing.isDeleted = true;
       existing.deletedAt = new Date();
       await existing.save();
       return { bookmarked: false };
     }
 
-    // Reactivate or insert (bookmark)
     await BookmarkModel.findOneAndUpdate(
-      { userId, postId },
+      { userId: user._id, postId },
       {
         $set: {
           isDeleted: false,
           deletedAt: null,
-          userId,
-          postId,
+          userId: user._id,
+          postId: new mongoose.Types.ObjectId(postId),
         },
       },
       {
@@ -35,10 +39,12 @@ export const toggleBookmark = async (userId: string, postId: string) => {
     );
 
     return { bookmarked: true };
-  } catch (error) {
-    throw new Error('Failed to toggle bookmark');
+  } catch (error: any) {
+    console.error(`[Bookmark Error] Failed for userId=${userId}, postId=${postId}:`, error);
+    throw new Error(`Toggle bookmark failed: ${error.message}`);
   }
 };
+
 
 
 export const getUserBookmarks = async (
@@ -49,8 +55,14 @@ export const getUserBookmarks = async (
   checkBookmark = false
 ) => {
   try {
-    const query: any = { userId, isDeleted: false };
+    // Step 1: Fetch the internal MongoDB user ID
+    const user = await UserModel.findOne({ userId }).select('_id').lean();
+    if (!user) {
+      throw new Error(`User not found with userId: ${userId}`);
+    }
 
+    // Step 2: Build query
+    const query: any = { userId: user._id, isDeleted: false };
     if (cursor) {
       const [createdAtStr, id] = cursor.split('_');
       if (createdAtStr && id) {
@@ -65,6 +77,7 @@ export const getUserBookmarks = async (
       }
     }
 
+    // Step 3: Fetch bookmarks with post and user info
     const bookmarks = await BookmarkModel.find(query)
       .sort({ createdAt: -1, _id: -1 })
       .limit(limit)
@@ -74,7 +87,7 @@ export const getUserBookmarks = async (
           path: 'userId',
           model: 'User',
           localField: 'userId',
-          foreignField: 'userId',
+          foreignField: '_id',
           justOne: true,
           select: 'name avatar slug',
         },
@@ -88,26 +101,35 @@ export const getUserBookmarks = async (
     let likedSet = new Set<string>();
     let bookmarkedSet = new Set<string>();
 
+    // Step 4: Check likes
     if (checkLike && postIds.length) {
-      const likedPosts = await LikeModel.find({
-        userId,
-        postId: { $in: postIds },
-        isDeleted: false,
-      }).select('postId');
-
-      likedSet = new Set(likedPosts.map((l) => l.postId.toString()));
+      try {
+        const likedPosts = await LikeModel.find({
+          userId: user._id,
+          postId: { $in: postIds },
+          isDeleted: false,
+        }).select('postId');
+        likedSet = new Set(likedPosts.map((l) => l.postId.toString()));
+      } catch (err) {
+        throw new Error(`Failed to fetch liked posts for user ${userId}`);
+      }
     }
 
+    // Step 5: Check bookmarks
     if (checkBookmark && postIds.length) {
-      const bookmarkedPosts = await BookmarkModel.find({
-        userId,
-        postId: { $in: postIds },
-        isDeleted: false,
-      }).select('postId');
-
-      bookmarkedSet = new Set(bookmarkedPosts.map((b) => b.postId.toString()));
+      try {
+        const bookmarkedPosts = await BookmarkModel.find({
+          userId: user._id,
+          postId: { $in: postIds },
+          isDeleted: false,
+        }).select('postId');
+        bookmarkedSet = new Set(bookmarkedPosts.map((b) => b.postId.toString()));
+      } catch (err) {
+        throw new Error(`Failed to re-fetch bookmarked posts for user ${userId}`);
+      }
     }
 
+    // Step 6: Enrich posts with isLiked and isBookmarked
     const enriched = bookmarks.map((bookmark) => {
       const post = bookmark.postId;
       return {
@@ -120,6 +142,7 @@ export const getUserBookmarks = async (
       };
     });
 
+    // Step 7: Cursor pagination
     const last = bookmarks[bookmarks.length - 1];
     const nextCursor =
       bookmarks.length === limit && last?.createdAt && last?._id
@@ -127,10 +150,12 @@ export const getUserBookmarks = async (
         : null;
 
     return { bookmarks: enriched, nextCursor };
-  } catch (error) {
-    throw new Error('Failed to fetch user bookmarks');
+  } catch (error: any) {
+    console.error('🔥 Error in getUserBookmarks:', error);
+    throw new Error(error.message || 'Unexpected error while fetching bookmarks');
   }
 };
+
 
 
 export const isPostBookmarked = async (userId: string, postId: string) => {

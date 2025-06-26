@@ -58,13 +58,64 @@ const getFollowingProfiles = async ({userId, limit= 10, cursor}: CursorParams) =
   };
 };
 
+const getFollowerProfiles = async ({userId, limit= 10, cursor}: CursorParams) => {
+  const user = await UserModel.findOne({ userId }).select('followers').lean();
+    if (!user || !user.followers?.length) return { data: [], nextCursor: null };
+      const matchCondition: any = {
+    _id: { $in: user.followers.map((id: any) => new Types.ObjectId(id)) },
+  };
+
+  // Apply cursor logic
+  if (cursor) {
+    matchCondition._id.$lt = new Types.ObjectId(cursor); // paginate backwards by _id
+  }
+
+  const usersFollowers = await UserModel.find(matchCondition)
+    .sort({ _id: -1 }) // newest followed profiles first
+    .limit(limit)
+    .select("name avatar slug")
+    .lean();
+  const nextCursor =
+    usersFollowers.length === limit
+      ? usersFollowers[usersFollowers.length - 1]._id.toString()
+      : null;
+  return {
+    data: usersFollowers,
+    nextCursor,
+  };
+};
 const unfriendUser = async({userId, toUserId}: {userId: string, toUserId: string}) => {
   const user = await UserModel.findOne({ userId }).select('_id following').lean();
   if (!user) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
  
-  const toUser = await UserModel.findOne({ _id:toUserId }).select('_id followers').lean();
+const toUserObjectId = new mongoose.Types.ObjectId(toUserId);
+ // 1. Remove each other's references
+  await Promise.all([
+    UserModel.updateOne(
+      { _id: user._id },
+      { $pull: { following: toUserObjectId } }
+    ),
+    UserModel.updateOne(
+      { _id: toUserObjectId },
+      { $pull: { followers: user._id } }
+    ),
 
+    // 2. Update FollowRequest status from ACCEPTED → REJECTED
+    FollowRequestModel.findOneAndUpdate(
+      {
+        fromUserId: user._id,
+        toUserId: toUserObjectId,
+        status: 'ACCEPTED',
+        isDeleted: false,
+      },
+      {
+        status: 'REJECTED',
+        updatedAt: new Date(),
+      }
+    ),
+  ]);
 
+  return { success: true, message: 'User unfriended successfully' };
 }
 
  const getUserSuggestions = async ({userId, limit, cursor}: CursorParams) => {
@@ -411,4 +462,4 @@ const cancelRequest = async(userId:string, toUserId:string)=> {
 }
 
 
-export { getUserByClerkId, updateUser, getFollowingProfiles, sendFollowRequest, getUserSuggestions, sentRequests, rejectRequest, cancelRequest, deleteSuggestion, acceptRequest, getRecievedRequests, unfriendUser };
+export { getUserByClerkId, updateUser, getFollowingProfiles, sendFollowRequest, getUserSuggestions, sentRequests, rejectRequest, cancelRequest, deleteSuggestion, acceptRequest, getRecievedRequests, unfriendUser, getFollowerProfiles };

@@ -109,6 +109,29 @@ const getUserFollowing: RequestHandler = asyncHandler(async (req, res) => {
   res.status(httpStatus.OK).json({ success: true, data, nextCursor });
 });
 
+
+const getUserFollower: RequestHandler = asyncHandler(async (req, res) => {
+  //get user
+  const { userId } = getAuth(req);
+  if (!userId) {
+    res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized, user not found' });
+    return;
+  }
+
+  const parseResult = generalPaginationSchema.safeParse(req.query)
+  if (!parseResult.success) {
+    return res.status(httpStatus.BAD_REQUEST).json({
+      success: false,
+      message: "Invalid query params",
+      errors: parseResult.error.flatten().fieldErrors,
+    });
+  }
+  //check his following list
+  const {cursor, limit} = parseResult.data
+  const {data, nextCursor} = await userService.getFollowerProfiles({userId, limit, cursor});
+  res.status(httpStatus.OK).json({ success: true, data, nextCursor });
+});
+
 const handleUserUnfriend:RequestHandler = asyncHandler(async (req, res) => {
   const { userId } = getAuth(req);
   if (!userId) {
@@ -138,6 +161,12 @@ const handleSendFollowRequest: RequestHandler = asyncHandler(async (req, res) =>
     return res.status(httpStatus.BAD_REQUEST).json({
       success: false,
       message: 'Missing required user IDs',
+    });
+  }
+  if( fromUserId === toUserId) {
+    return res.status(httpStatus.BAD_REQUEST).json({
+      success: false,
+      message: 'You cannot send a follow request to yourself',
     });
   }
   const request  = await userService.sendFollowRequest(fromUserId, toUserId);
@@ -228,4 +257,4 @@ const handleCancelFollowRequest:RequestHandler = asyncHandler(async(req,res)=> {
     res.status(httpStatus.OK).json({ success: true, message: 'Follow request cancelled', data: requestCancel });
 })
 
-export { getMyProfile, updateUser, getUserFollowing, handleSendFollowRequest, getSuggestions,getSentRequests, handleRejectRequest , handleCancelFollowRequest, handleDelete, handleAcceptRequest, getRecievedRequests, handleUserUnfriend};
+export { getMyProfile, updateUser, getUserFollowing, handleSendFollowRequest, getSuggestions,getSentRequests, handleRejectRequest , handleCancelFollowRequest, handleDelete, handleAcceptRequest, getRecievedRequests, handleUserUnfriend, getUserFollower};
