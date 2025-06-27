@@ -17,6 +17,15 @@ const getUserByClerkId = async (userId: string, fields: string) => {
   }
   return user;
 };
+const getUserById = async (userId: string) => {
+  const user = await UserModel.findById({_id:userId})
+    .select('name avatar banner slug bio ')
+    .lean();
+  if (!user || user.isDeleted) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+  return user;
+}
 
 const updateUser = async (userId: string, updates: UpdateUserInput) => {
   // Regenerate slug if name is changed
@@ -462,4 +471,4 @@ const cancelRequest = async(userId:string, toUserId:string)=> {
 }
 
 
-export { getUserByClerkId, updateUser, getFollowingProfiles, sendFollowRequest, getUserSuggestions, sentRequests, rejectRequest, cancelRequest, deleteSuggestion, acceptRequest, getRecievedRequests, unfriendUser, getFollowerProfiles };
+export { getUserByClerkId, updateUser, getFollowingProfiles, sendFollowRequest, getUserSuggestions, sentRequests, rejectRequest, cancelRequest, deleteSuggestion, acceptRequest, getRecievedRequests, unfriendUser, getFollowerProfiles, getUserById };

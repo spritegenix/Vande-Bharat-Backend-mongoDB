@@ -78,9 +78,9 @@ const deletePost = asyncHandler(async (req, res) => {
 
 const fetchPostById = asyncHandler(async (req, res) => {
     const { userId } = getAuth(req);
-    if (!userId) {
-        throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
-    }
+    // if (!userId) {
+    //     throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
+    // }
     const { postId } = req.params;
     if (!mongoose.Types.ObjectId.isValid(postId)) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid post ID');

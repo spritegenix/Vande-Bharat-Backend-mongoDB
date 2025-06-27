@@ -21,6 +21,22 @@ const getMyProfile: RequestHandler = asyncHandler(async (req, res) => {
   res.status(httpStatus.OK).json({ success: true, data: user });
 });
 
+const getIndividualProfile:RequestHandler = asyncHandler(async (req, res) => {
+  const { id: userId } = req.params;
+  if (!userId) {
+    return res.status(httpStatus.BAD_REQUEST).json({ message: 'User ID is required' });
+  }
+  const individualProfile = await userService.getUserById(userId);
+  if (!individualProfile) {
+    return res.status(httpStatus.NOT_FOUND).json({ message: 'User not found' });
+  }
+  res.status(httpStatus.OK).json({
+    success: true,
+    data: individualProfile,
+  });
+})
+
+
 // PATCH /api/v1/users/me
 const updateUser: RequestHandler = asyncHandler(async (req, res) => {
   const { userId } = getAuth(req);
@@ -257,4 +273,4 @@ const handleCancelFollowRequest:RequestHandler = asyncHandler(async(req,res)=> {
     res.status(httpStatus.OK).json({ success: true, message: 'Follow request cancelled', data: requestCancel });
 })
 
-export { getMyProfile, updateUser, getUserFollowing, handleSendFollowRequest, getSuggestions,getSentRequests, handleRejectRequest , handleCancelFollowRequest, handleDelete, handleAcceptRequest, getRecievedRequests, handleUserUnfriend, getUserFollower};
+export { getMyProfile, updateUser, getUserFollowing, handleSendFollowRequest, getSuggestions,getSentRequests, handleRejectRequest , handleCancelFollowRequest, handleDelete, handleAcceptRequest, getRecievedRequests, handleUserUnfriend, getUserFollower,getIndividualProfile};

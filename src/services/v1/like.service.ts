@@ -1,9 +1,14 @@
 import { LikeModel } from '@/models/like.model';
 import { PostModel } from '@/models/post.model';
+import { UserModel } from '@/models/user.model';
 import { Types } from 'mongoose';
 
 export const toggleLike = async (userId: string, postId: string) => {
-    const existing = await LikeModel.findOne({ userId, postId, isDeleted: false });
+    const user = await UserModel.findOne({ userId }).select('_id').lean();
+    if (!user) {
+        throw new Error(`User not found with userId: ${userId}`);
+    }
+    const existing = await LikeModel.findOne({ userId:user._id, postId, isDeleted: false });
 
     if (existing) {
         // Already liked → soft delete → unlike
@@ -17,9 +22,9 @@ export const toggleLike = async (userId: string, postId: string) => {
     }
 
     await LikeModel.findOneAndUpdate(
-        { userId, postId },
+        { userId:user._id, postId },
         {
-            userId,
+            userId:user._id,
             postId,
             isDeleted: false,
             deletedAt: null,
@@ -32,7 +37,11 @@ export const toggleLike = async (userId: string, postId: string) => {
 };
 
 export const isPostLiked = async (userId: string, postId: string) => {
-    const existing = await LikeModel.findOne({ userId, postId, isDeleted: false });
+    const user = await UserModel.findOne({ userId }).select('_id').lean();
+    if (!user) {
+        throw new Error(`User not found with userId: ${userId}`);
+    }
+    const existing = await LikeModel.findOne({ userId:user._id, postId, isDeleted: false });
     return !!existing;
 };
 

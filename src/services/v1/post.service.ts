@@ -375,7 +375,7 @@ export const getPostById = async (
       path: 'userId',
       model: 'User',
       localField: 'userId',
-      foreignField: 'userId', // <-- match on string field, not _id
+      foreignField: '_id', // <-- match on string field, not _id
       justOne: true,
       select: 'name avatar slug',
     })
