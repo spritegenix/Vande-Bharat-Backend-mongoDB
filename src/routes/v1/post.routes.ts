@@ -19,7 +19,7 @@ router.get('/all-posts', postController.fetchPosts);
 
 // GET /api/v1/posts/my-posts
 // GET /api/v1/posts/my-posts?filter=<created|liked|commented|replied>&limit=<n>&cursor=<cursor>
-router.get('/my-posts', requireAuth(), validateRequest(userPostsQuerySchema, 'query'), postController.fetchUserPosts);
+router.get('/my-posts/:slug', requireAuth(), validateRequest(userPostsQuerySchema, 'query'), postController.fetchUserPosts);
 
 
 

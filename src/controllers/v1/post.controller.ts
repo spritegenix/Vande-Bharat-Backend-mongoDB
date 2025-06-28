@@ -127,9 +127,14 @@ const fetchPosts = asyncHandler(async (req, res) => {
 
 const fetchUserPosts = asyncHandler(async (req, res) => {
     const { userId } = getAuth(req);
-    if (!userId) {
+      if (!userId) {
         throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
     }
+    const {slug} = req.params;
+    if (!slug) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Slug is required');
+    }
+  
     const { filter, limit, cursor } = req.query as {
         filter?: 'created' | 'liked' | 'commented' | 'replied';
         limit?: string;
@@ -141,6 +146,7 @@ const fetchUserPosts = asyncHandler(async (req, res) => {
         filter: filter || 'created',
         limit: parseInt(limit as string) || POSTS_PAGE_LIMIT,
         cursor,
+        slug
     });
 
     res.status(200).json({

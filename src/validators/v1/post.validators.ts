@@ -71,7 +71,7 @@ export type CommentIdParamInput = z.infer<typeof commentIdParamSchema>;
 
 export const userPostsQuerySchema = z.object({
   filter: z
-    .enum(['created', 'liked', 'commented', 'replied'])
+    .enum(['created', 'liked', 'commented', 'replied',])
     .optional()
     .default('created'),
   limit: z

@@ -22,11 +22,11 @@ const getMyProfile: RequestHandler = asyncHandler(async (req, res) => {
 });
 
 const getIndividualProfile:RequestHandler = asyncHandler(async (req, res) => {
-  const { id: userId } = req.params;
-  if (!userId) {
-    return res.status(httpStatus.BAD_REQUEST).json({ message: 'User ID is required' });
+  const {slug} = req.params;
+  if (!slug) {
+    return res.status(httpStatus.BAD_REQUEST).json({ message: 'Slug is required' });
   }
-  const individualProfile = await userService.getUserById(userId);
+  const individualProfile = await userService.getUserById(slug);
   if (!individualProfile) {
     return res.status(httpStatus.NOT_FOUND).json({ message: 'User not found' });
   }
@@ -44,7 +44,8 @@ const updateUser: RequestHandler = asyncHandler(async (req, res) => {
     res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized, user not found' });
     return;
   }
-  const parsed = updateUserSchema.safeParse(req.body);
+  const parsed = updateUserSchema.safeParse(req.body.payload);
+  
   if (!parsed.success) {
     return res
       .status(httpStatus.BAD_REQUEST)
@@ -106,6 +107,7 @@ const handleDelete: RequestHandler = asyncHandler(async (req, res) => {
 const getUserFollowing: RequestHandler = asyncHandler(async (req, res) => {
   //get user
   const { userId } = getAuth(req);
+  const {slug} = req.params
   if (!userId) {
     res.status(httpStatus.UNAUTHORIZED).json({ message: 'Unauthorized, user not found' });
     return;
@@ -121,7 +123,7 @@ const getUserFollowing: RequestHandler = asyncHandler(async (req, res) => {
   }
   //check his following list
   const {cursor, limit} = parseResult.data
-  const {data, nextCursor} = await userService.getFollowingProfiles({userId, limit, cursor});
+  const {data, nextCursor} = await userService.getFollowingProfiles({userId, limit, cursor,slug});
   res.status(httpStatus.OK).json({ success: true, data, nextCursor });
 });
 

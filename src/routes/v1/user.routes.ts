@@ -14,8 +14,8 @@ router.get('/me', requireAuth(), userController.getMyProfile);
 router.get("/suggestions", requireAuth(), userController.getSuggestions)
 router.patch("/suggestions/:id/delete", requireAuth(), userController.handleDelete)
 
-router.get("/following", requireAuth(), userController.getUserFollowing)
-router.get("/followers", requireAuth(), userController.getUserFollower)
+router.get("/following/:slug", requireAuth(), userController.getUserFollowing)
+router.get("/followers/:slug", requireAuth(), userController.getUserFollower)
 router.patch("/following/:toUserId/unfriend", requireAuth(), userController.handleUserUnfriend)
 router.get("/sent-requests", requireAuth(), userController.getSentRequests)
 router.get("/recieved-requests", requireAuth(), userController.getRecievedRequests)
@@ -31,7 +31,7 @@ router.patch('/me', requireAuth(), validateRequest(updateUserSchema, 'body'), us
 router.get("/health", (_req: Request, res: Response) => {
     res.status(200).json({ status: "OK", environment: env.NODE_ENV, });
 });
-router.get('/:id', requireAuth(), userController.getIndividualProfile);
+router.get('/:slug/single', requireAuth(), userController.getIndividualProfile);
 export default router;
 
 

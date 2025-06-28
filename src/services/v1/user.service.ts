@@ -8,7 +8,8 @@ import mongoose, { Types } from 'mongoose';
 interface CursorParams {
   userId: string;
   limit?: number;
-  cursor?: string; // Mongo ObjectId
+  cursor?: string;
+  slug?:string
 }
 const getUserByClerkId = async (userId: string, fields: string) => {
   const user = await UserModel.findOne({ userId }).select(fields).lean();
@@ -17,8 +18,8 @@ const getUserByClerkId = async (userId: string, fields: string) => {
   }
   return user;
 };
-const getUserById = async (userId: string) => {
-  const user = await UserModel.findById({_id:userId})
+const getUserById = async (slug: string) => {
+  const user = await UserModel.findOne({slug})
     .select('name avatar banner slug bio ')
     .lean();
   if (!user || user.isDeleted) {
@@ -40,8 +41,8 @@ const updateUser = async (userId: string, updates: UpdateUserInput) => {
   return user;
 };
 
-const getFollowingProfiles = async ({userId, limit= 10, cursor}: CursorParams) => {
-  const user = await UserModel.findOne({ userId }).select('following').lean();
+const getFollowingProfiles = async ({userId, limit= 10, cursor, slug}: CursorParams) => {
+  const user = await UserModel.findOne({ slug }).select('following').lean();
     if (!user || !user.following?.length) return { data: [], nextCursor: null };
       const matchCondition: any = {
     _id: { $in: user.following.map((id: any) => new Types.ObjectId(id)) },
@@ -67,8 +68,8 @@ const getFollowingProfiles = async ({userId, limit= 10, cursor}: CursorParams) =
   };
 };
 
-const getFollowerProfiles = async ({userId, limit= 10, cursor}: CursorParams) => {
-  const user = await UserModel.findOne({ userId }).select('followers').lean();
+const getFollowerProfiles = async ({userId, limit= 10, cursor, slug}: CursorParams) => {
+  const user = await UserModel.findOne({ slug }).select('followers').lean();
     if (!user || !user.followers?.length) return { data: [], nextCursor: null };
       const matchCondition: any = {
     _id: { $in: user.followers.map((id: any) => new Types.ObjectId(id)) },

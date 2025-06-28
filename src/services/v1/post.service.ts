@@ -304,18 +304,20 @@ export const getUserPosts = async ({
   filter = 'created',
   limit,
   cursor,
+  slug,
 }: {
   userId: string;
   filter: 'created' | 'liked' | 'commented' | 'replied';
   limit: number;
   cursor?: string;
+  slug: string;
 }) => {
   const baseMatch: any = { isDeleted: false };
-const getUser = await UserModel.findOne({ userId }).select('userId').lean();
-  if (!getUser) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  const getUser = await UserModel.findOne({ slug }).select('_id').lean();
+  if (!getUser) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+if(!userId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
   }
-
   if (cursor) {
     const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString());
     baseMatch.$or = [
@@ -329,24 +331,31 @@ const getUser = await UserModel.findOne({ userId }).select('userId').lean();
 
   let match: any = { ...baseMatch };
   if (filter === 'created') {
-    match.userId = getUser;
+    match.userId = getUser._id;
   } else if (filter === 'liked') {
-    match.likes = { $in: [getUser] };
+    match.likes = { $in: [getUser._id] };
   } else if (filter === 'commented' || filter === 'replied') {
     const comments = await CommentModel.find({
-      getUser,
+      userId: getUser.userId,
       isDeleted: false,
       ...(filter === 'replied' ? { parentCommentId: { $ne: null } } : {}),
-    })
-      .select('postId')
-      .lean();
+    }).select('postId').lean();
 
     const postIds = [...new Set(comments.map((c) => c.postId.toString()))];
     match._id = { $in: postIds.map((id) => new Types.ObjectId(id)) };
   }
 
-  const posts = await PostModel.find(match).sort({ createdAt: -1, _id: -1 }).limit(limit).lean();
+  const posts = await PostModel.find(match)
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(limit)
+    .populate({
+      path: 'userId',
+      select: 'name avatar slug',
+      strictPopulate: false,
+    })
+    .lean();
 
+  // Cursor
   let nextCursor = null;
   if (posts.length === limit) {
     const last = posts[posts.length - 1];
@@ -358,11 +367,51 @@ const getUser = await UserModel.findOne({ userId }).select('userId').lean();
     ).toString('base64');
   }
 
+  // Likes / Bookmarks
+  let likedMap: Record<string, boolean> = {};
+  let bookmarkedMap: Record<string, boolean> = {};
+
+  if (userId && posts.length > 0) {
+    const currentUser = await UserModel.findOne({ userId }).select('_id').lean();
+    const postIds = posts.map((p) => p._id.toString());
+if (!currentUser) {
+  throw new ApiError(httpStatus.NOT_FOUND, 'Current user not found');
+}
+    const likes = await LikeModel.find({
+      userId: currentUser._id,
+      postId: { $in: postIds },
+      isDeleted: false,
+    }).select('postId');
+
+    likedMap = likes.reduce((acc, like) => {
+      acc[like.postId.toString()] = true;
+      return acc;
+    }, {} as Record<string, boolean>);
+
+    const bookmarks = await BookmarkModel.find({
+      userId: currentUser._id,
+      postId: { $in: postIds },
+      isDeleted: false,
+    }).select('postId');
+
+    bookmarkedMap = bookmarks.reduce((acc, bm) => {
+      acc[bm.postId.toString()] = true;
+      return acc;
+    }, {} as Record<string, boolean>);
+  }
+
+  const enrichedPosts = posts.map((post) => ({
+    ...post,
+    isLiked: likedMap[post._id.toString()] || false,
+    isBookmarked: bookmarkedMap[post._id.toString()] || false,
+  }));
+
   return {
-    posts,
+    posts: enrichedPosts,
     nextCursor,
   };
 };
+
 
 export const getPostById = async (
   postId: string,
